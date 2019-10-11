@@ -1,5 +1,5 @@
 ; ----------------------------------------------------------------------------
-; Copyright 1987-1988 by T.Zoerner (tomzo at users.sf.net)
+; Copyright 1987-1988,2019 by T.Zoerner (tomzo at users.sf.net)
 ; All rights reserved.
 ;
 ; Redistribution and use in source and binary forms, with or without
@@ -23,10 +23,12 @@
 ; SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ; ----------------------------------------------------------------------------
  module    MENU_1
- section   drei
- pagelen   32767
- pagewid   133
- noexpand
+ ;section   drei
+ ;pagelen   32767
+ ;pagewid   133
+ ;noexpand
+ include "f_sys.s"
+ include "f_def.s"
  ;
  XREF  aescall,vdicall,contrl,intin,intout,ptsin,addrin,addrout,stack
  XREF  msg_buff,bildbuff,wi1,wi_count,rec_adr,menu_adr,nr_vier,win_xy
@@ -37,122 +39,44 @@
  ;
  XDEF  choofig,chooset,chooseg,drei_chg,get_koos,over_que,directory
  XDEF  now_offs,alertbox,evt_menu,wind_chg
-          ;
-moove     macro     l quelle ziel
-          ifstr     [quelle] = 0 goto moove1
-          ifstr     [.left(quelle,1)] = {!} goto moove2
-quelle    setstr    { #[quelle]}
-moove2    maclab
-          move.[l]  [.right(quelle,[.len(quelle)]-1)],[ziel]
-          goto      exit
-moove1    maclab
-          clr.[l]   [ziel]
-exit      maclab
-          endm
-          ;
-aes       macro     code sintin sintout saddrin saddrout
-          local     parnum,count
-          move.w    #[code],(a5)
-          moove     l,[sintin]<<16+[sintout],2(a5)
-          moove     l,[saddrin]<<16+[saddrout],6(a5)
-parnum    setnum    6
-count     setnum    0
-aes1      maclab
-          ifnum     [sintin] = 0 goto aes2
-          ifnum     [parnum] > [.nparms] goto aescal
-          moove     w,[.parm([parnum])],([parnum]-6)*2(a6)
-parnum    setnum    [parnum]+1
-sintin    setnum    [sintin]-1
-          goto      aes1
-aes2      maclab
-          ifnum     [saddrin] = 0 goto aescal
-          moove     l,[.parm([parnum])],addrin+[count]*4
-count     setnum    [count]+1
-saddrin   setnum    [saddrin]-1
-parnum    setnum    [parnum]+1
-          goto      aes2
-aescal    maclab
-          bsr       aescall
-          endm
-          ;
-vdi       macro     code,sptsin,sintin
-          local     parnum,count
-          move.l    #[code]<<16+[sptsin],(a5)
-          moove     w,[sintin],6(a5)
-parnum    setnum    4
-count     setnum    0
-vdi1      maclab
-          ifnum     [sptsin] = 0 goto vdi2
-          ifnum     [parnum] >= [.nparms] goto vdi3
-          moove     w,[.parm([parnum])],ptsin+([parnum]-4)*2
-          moove     w,[.parm([parnum]+1)],ptsin+([parnum]-3)*2
-parnum    setnum    [parnum]+2
-sptsin    setnum    [sptsin]-1
-          goto      vdi1
-vdi2      maclab
-          ifnum     [sintin] = 0 goto vdi3
-          ifnum     [parnum] > [.nparms] goto vdi3
-          moove     w,[.parm([parnum])],[count]*2(a6)
-count     setnum    [count]+1
-parnum    setnum    [parnum]+1
-sintin    setnum    [sintin]-1
-          goto      vdi2
-vdi3      maclab
-          bsr       vdicall
-          endm
-          ;        *** Offsets zu Window-Records ***
-bild_adr  equ  2    Adresse des Bildpuffers
-info      equ  6    0:open/1:change/2:virgin/3:wieder unchanged
-lastnum   equ  7    Handle des zuletzt akt. Win.
-yx_off    equ  16   Abstand Fensterursprung zu 0/0
-fenster   equ  22   Pos. und Ausmaûe
-schieber  equ  30   Schieber hor./ver.:Pos./Grîûe
-          ;        *** Offsets zu Formular-Rec.s ***
-ted_val   equ  4    akt., gÅltiger Wert
-ted_adr   equ  10   Adresse der TEDINFO-Struktur
-          ;        *** Offsets zu markflags ***
-copy      equ  0    Kopieren?
-vmod      equ  1    akt. VerknÅpf-mode
-einf      equ  2    Auss im Buff(Adr. drawflag+12)?
-ovku      equ  3    OV-Kurz-Mode?
-del       equ  5    alten Auss lîschen vor schub?
-ov        equ  6    OV-Mode?
-buff      equ  8    Adr. OV-Buffer
-chg       equ  12   bearbeitet?
-part      equ  13   öberhang?
-modi      equ  14   VerknÅpfungsmodi akt/letzter Auss
-old       equ  16   öberhang->alte Koo/Offset
-*---------------------------------------------------------MENU-HANDLER
+
+*---------------------------------------------------------------------
+*               D E S K   M E N U
+*---------------------------------------------------------------------
 evt_menu  move.l    msg_buff+6,d0
           cmp.l     #$40000,d0
           bhs.s     nr_zwei
-          moveq.l   #1,d2               ********* Desk-MenÅ **********
+          moveq.l   #1,d2
           lea       frinfobo,a2
-          bsr       form_do             --- Info-Box ---
+          bsr       form_do             --- Show "About..." dialog ---
           bsr       form_del
           bra       men_inv
+          ;
+*---------------------------------------------------------------------
+*               F I L E   M E N U
+*---------------------------------------------------------------------
 nr_zwei   cmp.l     #$50000,d0
           bhs       nr_drei
-          cmp.b     #$1d,d0             ******** Befehle-MenÅ ********
+          cmp.b     #$1d,d0
           bne       new
-          bsr       wind_chg            --- Abbruch ---
+          bsr       wind_chg            --- Command: Discard ---
           bne.s     mainrts3
           moveq.l   #6,d0
           lea       wi1,a0
-mainrts2  btst.b    #1,info(a0)         Speicher gesichert oder leer ?
+mainrts2  btst.b    #1,INFO(a0)         Image saved or empty?
           bne.s     mainrts3
           dbra      d0,mainrts2
           bra.s     mainrts1
 mainrts3  moveq.l   #1,d0
           lea       stralneu,a0
-          bsr       alertbox            nein -> um Ok bitten
+          bsr       alertbox            no -> ask for confirmation
           cmp.w     #1,d0
           bne       men_inv
 mainrts1  ;
           move.l    maus_rec+4,14(a5)
-          vdi       125 0 0             ;alter Button-Vektor
+          vdi       125 0 0             ;old button-vector
           move.l    maus_rec+8,14(a5)
-          vdi       127 0 0             ;alter Mouse-Vektor
+          vdi       127 0 0             ;old mouse-vector
           aes       111 0 1 0 0         ;rsrc_free
           vdi       101 0 0             ;close_vwork
           aes       19 0 1 0 0          ;appl_exit
@@ -160,36 +84,36 @@ mainrts1  ;
           trap      #1
           ;
 new       cmp.b     #$16,d0
-          bne.s     zwei_17
-          bsr       wind_chg            --- Neu ---
+          bne       zwei_17
+          bsr       wind_chg            --- Command: Discard ---
           beq.s     new1
           moveq.l   #1,d0
-          lea       stralneu,a0         "Arbeit lîschen ?"
+          lea       stralneu,a0         warning "discard image?"
           bsr       alertbox
           cmp.w     #1,d0
-          bne       men_inv             nein -> Abbruch
+          bne       men_inv             not confirmed -> abort
 new1      bsr       fram_del
           move.l    menu_adr,a0
-          bset      #3,491(a0)          RÅckgÑngig disabeln
-          bset.b    #3,635(a0)          Abspeichern disabeln
+          bset      #3,491(a0)          disable "undo"
+          bset.b    #3,635(a0)          disable "save"
           lea       drawflag,a1
           move.l    12(a1),d0
-          cmp.l     bild_adr(a4),d0
+          cmp.l     BILD_ADR(a4),d0
           bne.s     new4
-          bset.b    #3,1643(a0)         EinfÅgen disabeln
+          bset.b    #3,1643(a0)         disable "paste"
           lea       mrk,a0
-          clr.w     einf(a0)
+          clr.w     EINF(a0)
 new4      lea       mark_buf,a0
           clr.w     (a0)
-          move.b    #1,info(a4)         nur Open-Flag gesetzt
+          move.b    #1,INFO(a4)         only open-flag set
           clr.w     (a1)
           move.w    #3999,d0
-          move.l    bild_adr(a4),a0
-new2      clr.l     (a0)+               Fensterpuffer lîschen
+          move.l    BILD_ADR(a4),a0
+new2      clr.l     (a0)+               clear window buffer
           clr.l     (a0)+
           dbra      d0,new2
           bsr       men_inv
-          move.l    bild_adr(a4),a0     Fenstertitel lîschen
+          move.l    BILD_ADR(a4),a0     clear window title
           add.w     #32010,a0
           clr.w     (a0)
           bsr       name_xx
@@ -197,23 +121,23 @@ new2      clr.l     (a0)+               Fensterpuffer lîschen
           ;
 zwei_17   cmp.b     #$17,d0
           bne       zwei_18
-          bsr       over_que            --- ôffnen ---
+          bsr       over_que            --- Command: New ---
           bne       men_inv
           pea       men_inv
-open      bsr       save_scr            +++ Fenster îffnen +++
+open      bsr       save_scr            +++ open a new window +++
           bsr       fram_del
           cmp.w     #6,wi_count
           bne.s     open11
-          moveq.l   #1,d0               7-Fenster-Warnung ausgeben
+          moveq.l   #1,d0               warn when opening 7th window
           lea       stralwi7,a0
           bsr       alertbox
           cmp.w     #1,d0
-          bne.s     exit
+          bne.s     open_rts
 open11    move.l    #-1,-(sp)           ;malloc
           move.w    #$48,-(sp)
           trap      #1
           addq.l    #6,sp
-          cmp.l     #32100,d0           noch 32 K frei ?
+          cmp.l     #32100,d0           still 32 kB free?
           bge.s     open9
           lea       stralnom,a0
           moveq.l   #1,d0
@@ -225,18 +149,18 @@ open9     ;
           move.w    intout,d1
           bpl.s     open1
 open2     moveq.l   #1,d0
-          lea       stralnow,a0         kein weiteres Fenster->Abbruch
+          lea       stralnow,a0         error creating window -> abort
           bsr       alertbox
           moveq.l   #-1,d0
-exit      rts
-open1     moveq.l   #6,d0               freies Record suchen...
+open_rts  rts
+open1     moveq.l   #WIN_STRUCT_CNT-1,d0   search for free window record...
           move.l    a4,a0
           lea       wi1,a4
-open3     btst.b    #0,info(a4)
+open3     btst.b    #0,INFO(a4)
           beq.s     open4
-          add.w     #38,a4
+          add.w     #WIN_STRUCT_SZ,a4
           dbra      d0,open3
-open12    move.l    a0,a4               schon 7 Fenster->Abbruch
+open12    move.l    a0,a4               already 7 windows -> abort
           bra       open2
 open4     movem.l   a0/d1,-(sp)
           move.l    #32100,-(sp)        ;malloc
@@ -244,12 +168,12 @@ open4     movem.l   a0/d1,-(sp)
           trap      #1
           addq.l    #6,sp
           movem.l   (sp)+,a0/d1
-          move.l    d0,bild_adr(a4)
-          bmi       open12              Fehler ?
-          move.w    d1,(a4)             Record initialisieren
-          move.b    #1,info(a4)
-          move.b    1(a0),lastnum(a4)
-          move.l    d0,a0               Bild-Buffer lîschen
+          move.l    d0,BILD_ADR(a4)
+          bmi       open12              malloc failed?
+          move.w    d1,WIN_HNDL(a4)     initialize window record
+          move.b    #1,INFO(a4)
+          move.b    1(a0),LASTNUM(a4)
+          move.l    d0,a0               clear window buffer
           move.w    #1999,d0
 open6     clr.l     (a0)+
           clr.l     (a0)+
@@ -258,46 +182,46 @@ open6     clr.l     (a0)+
           dbra      d0,open6
           move.l    a4,rec_adr
           move.l    menu_adr,a0
-          bset      #3,635(a0)          Abspeichern disabeln
+          bset      #3,635(a0)          disable "save"
           lea       now_offs,a1
-          moveq.l   #4,d0               MenÅeintrÑge enabeln
+          moveq.l   #4,d0               enable menu entries
 open5     add.w     (a1)+,a0
           bclr.b    #3,(a0)
           dbra      d0,open5
-          bsr       koo_chk             "Koordinaten" evtll. disabeln
+          bsr       koo_chk             disable "Coordinates" if needed
           add.w     #1,wi_count
-          cmp.w     #7,wi_count         7 Fenster offen ?
+          cmp.w     #7,wi_count         7 windows open?
           blo.s     open7
-          move.l    menu_adr,a3         -> Accessories disabeln
+          move.l    menu_adr,a3         yes -> disable accessories
           add.w     #323,a3
           moveq.l   #5,d0
 open8     bset.b    #3,(a3)
           add.w     #24,a3
           dbra      d0,open8
-open7     moveq.l   #8,d0               Schieber: Position 0
+open7     moveq.l   #8,d0               slider: position 0
           clr.w     d1
           bsr       set_xx
           moveq.l   #9,d0
           clr.w     d1
           bsr       set_xx
-          clr.l     schieber(a4)
-          moveq.l   #15,d0              alte Grîûe
-          move.w    schieber+4(a4),d1
+          clr.l     SCHIEBER(a4)
+          moveq.l   #15,d0              previous size
+          move.w    SCHIEBER+4(a4),d1
           bsr       set_xx
           moveq.l   #16,d0
-          move.w    schieber+6(a4),d1
+          move.w    SCHIEBER+6(a4),d1
           bsr       set_xx
-          move.l    fenster(a4),8(a6)   ;graf_growbox
-          move.l    fenster+4(a4),12(a6)
-          move.l    fenster(a4),(a6)
+          move.l    FENSTER(a4),8(a6)   ;graf_growbox
+          move.l    FENSTER+4(a4),12(a6)
+          move.l    FENSTER(a4),(a6)
           move.l    #$100010,4(a6)
           aes       73 8 1 0 0
-          move.l    bild_adr(a4),a0     Fenstertitel setzen
+          move.l    BILD_ADR(a4),a0     set window title
           add.w     #32010,a0
           clr.w     (a0)
           bsr       name_xx
-          move.l    fenster(a4),4(a6)
-          move.l    fenster+4(a4),8(a6)
+          move.l    FENSTER(a4),4(a6)
+          move.l    FENSTER+4(a4),8(a6)
           aes       108 6 5 0 0 0 $fef  ;wind_calc
           move.l    intout+2,2(a6)
           move.l    intout+6,6(a6)
@@ -307,11 +231,11 @@ open7     moveq.l   #8,d0               Schieber: Position 0
           ;
 zwei_18   cmp.b     #$18,d0
           bne       zwei_14
-          bsr       over_que            --- Laden ---
+          bsr       over_que            --- Command: Load ---
           bne       men_inv
           clr.b     filename
           clr.w     d3
-          bsr       itemslct            Item-Selector aufrufen
+          bsr       itemslct            open item selector
           tst.b     d0
           bne       men_inv
           clr.w     -(sp)               open
@@ -321,40 +245,40 @@ zwei_18   cmp.b     #$18,d0
           addq.l    #8,sp
           move.w    d0,handle
           bmi       tos_err
-          move.b    frdatei+33,d1       D1: Format
-          bne.s     load2               +++ Format OHNE +++
-          move.l    bildbuff,a2         A2: Bufferadresse
+          move.b    frdatei+33,d1       D1: format
+          bne.s     load2               +++ Format RAW +++
+          move.l    bildbuff,a2         A2: address of buffer
           move.l    a2,a0
           move.w    #1999,d0
-load7     clr.l     (a0)+               Zwischenspeicher lîschen
+load7     clr.l     (a0)+               clear image buffer
           clr.l     (a0)+
           clr.l     (a0)+
           clr.l     (a0)+
           dbra      d0,load7
-          move.w    frdatei+6,d0        Bildbreite in Bytes umrechnen
+          move.w    frdatei+6,d0        convert image width to bytes
           move.w    d0,d2
           lsr.w     #3,d2
           and.w     #7,d0
           beq.s     load4
-          addq.w    #1,d2               Breite auf Bytes runden ?
+          addq.w    #1,d2               ask confirmation "rounding width to multiple of 8?"
           lea       stralbyt,a0
           moveq.l   #1,d0
           bsr       alertbox
           cmp.w     #2,d0
-          beq       load3               ..nicht erwÅnscht -> Abbruch
+          beq       load3               not confirmed -> abort
 load4     move.w    d2,d3
           mulu.w    frdatei+20,d2
           bsr       maus_bne
-          bsr       load_red            Bild laden
+          bsr       load_red            load image data
           bsr       load_opn
           move.w    frdatei+20,d0
 load12    subq.w    #1,d0
           moveq.l   #80,d2
           sub.w     d3,d2
           subq.w    #1,d3
-          move.l    bild_adr(a4),a0
+          move.l    BILD_ADR(a4),a0
           move.l    bildbuff,a2
-load5     move.w    d3,d1               Bild in Puffer kopieren
+load5     move.w    d3,d1               copy image data into buffer
 load6     move.b    (a2)+,(a0)+
           dbra      d1,load6
           add.w     d2,a0
@@ -374,15 +298,15 @@ load2     cmp.b     #1,d1
           trap      #14
           addq.l    #6,sp
           bsr       load_opn
-          bsr       maus_bne            Biene-Maus
-          move.l    bild_adr(a4),a2
-          move.l    #32000,d2           Bild laden
-          bsr.s     load_red
+          bsr       maus_bne            switch mouse form to "bee"
+          move.l    BILD_ADR(a4),a2
+          move.l    #32000,d2           load image
+          bsr       load_red
           bra.s     load3
 load10    moveq.l   #10,d2              +++ Format LOGO +++
           move.l    bildbuff,a2
           bsr.s     load_red
-          cmp.w     #1,(a2)             Header-Test
+          cmp.w     #1,(a2)             check header
           bne       load_bad
           move.w    6(a2),d3
           move.w    #640,d0
@@ -394,20 +318,20 @@ load10    moveq.l   #10,d2              +++ Format LOGO +++
           cmp.w     4(a2),d0
           blo.s     load_bad
           bsr       maus_bne
-          move.w    d3,d0               D3: Breite in Bytes
+          move.w    d3,d0               D3: width in bytes
           lsr.w     #3,d3
           bclr      #0,d3
           and.b     #15,d0
           beq.s     load11
           addq.w    #2,d3
-load11    move.w    8(a2),d4            D4: Hîhe
+load11    move.w    8(a2),d4            D4: height
           move.w    d3,d2
-          mulu.w    8(a2),d2            D2: Anz. aller Bytes
-          bsr.s     load_red            Bild laden+in Buffer kopieren
-          bsr.s     load_opn            Fenster îffnen
+          mulu.w    8(a2),d2            D2: total number of bytes
+          bsr.s     load_red            load image data & copy to buffer
+          bsr.s     load_opn            open window
           move.w    d4,d0
           bra       load12
-load3     bset.b    #2,info(a4)         Virgin-Flag setzen
+load3     bset.b    #2,INFO(a4)         set "virgin" flag
           clr.l     d3
 load9     move.w    handle,-(sp)        ++ close ++
           move.w    #$3e,-(sp)
@@ -418,57 +342,57 @@ load9     move.w    handle,-(sp)        ++ close ++
           bne       men_inv
           bsr       men_inv
           bra       win_rdw
-load_red  move.l    a2,-(sp)            ++ Daten einlesen ++
-          move.l    d2,-(sp)            D0: Anz der Bytes
+load_red  move.l    a2,-(sp)            ++ read data from file ++
+          move.l    d2,-(sp)            D0: length
           move.w    handle,-(sp)
           move.w    #$3f,-(sp)
           trap      #1
           lea       12(sp),sp
           rts
-load_bad  lea       stralbad,a0         ++ Formatfehler ++
+load_bad  lea       stralbad,a0         ++ format error ++
           moveq.l   #1,d0
           bsr       alertbox
           moveq.l   #-1,d3
           bra       load9
-load_opn  bsr       wind_chg            ++ Fenster vorbereiten ++
+load_opn  bsr       wind_chg            ++ prepare window ++
           bne.s     load_op2
-          btst.b    #2,info(a4)
+          btst.b    #2,INFO(a4)
           bne.s     load_op2
           move.w    mark_buf,d0
           beq       set_name
 load_op2  bsr       open
-          tst.b     d0                  Fehler ?
+          tst.b     d0                  error?
           beq       set_name
           addq.l    #4,sp
           moveq.l   #-1,d3
           bra       load9
-tos_err   neg.w     d0                  ++ Fehler ausgeben ++
+tos_err   neg.w     d0                  ++ report error ++
           aes       53 1 1 0 0 !d0
           bra       men_inv
           ;
 zwei_14   cmp.b     #$14,d0
           bne       zwei_1b
-          move.b    drawflag,d0         --- RÅckgÑngig ---
-          beq       exit
-          btst.b    #1,info(a4)         bisher nur 1 Bearbeitung ?
+          move.b    drawflag,d0         --- Command: Undo ---
+          beq       open_rts
+          btst.b    #1,INFO(a4)         single modification only so far?
           bne.s     regen8
-          bchg.b    #3,info(a4)         -> Bild wieder unverÑndert
+          bchg.b    #3,INFO(a4)         yes -> reset modification flag
 regen8    move.w    mark_buf,d0
           beq       regen10
           lea       mrk,a2
-          tst.b     ov(a2)
+          tst.b     OV(a2)
           beq       regen10
-          tst.b     part(a2)            ++ OV-Mode (KnÅpf/öberhang) ++
+          tst.b     PART(a2)            ++ OV-Mode (comb./clip) ++
           bne.s     regen11
-          move.b    modi(a2),d0
+          move.b    MODI(a2),d0
           bne       regen10
-regen11   move.w    #3999,d0            Hintergrund
-          move.l    mrk+buff,a0
-          move.l    bild_adr(a4),a1
+regen11   move.w    #3999,d0            background
+          move.l    mrk+BUFF,a0
+          move.l    BILD_ADR(a4),a1
 regen12   move.l    (a0)+,(a1)+
           move.l    (a0)+,(a1)+
           dbra      d0,regen12
-          lea       stack,a0            Parameter
+          lea       stack,a0            parameter
           lea       drawflag+4,a1
           move.l    (a1),d0
           move.l    mark_buf+2,(a1)+
@@ -480,47 +404,47 @@ regen12   move.l    (a0)+,(a1)+
           move.l    d2,8(a0)
           move.l    d0,24(a0)
           move.l    d1,28(a0)
-          move.b    vmod(a2),chg(a0)
-          move.b    modi+1(a2),vmod(a2)
-          tst.b     part(a2)            öberhang-Status
+          move.b    VMOD(a2),CHG(a0)
+          move.b    MODI+1(a2),VMOD(a2)
+          tst.b     PART(a2)            clipping status
           beq.s     regen13
-          bset.b    #7,part(a2)
+          bset.b    #7,PART(a2)
           beq.s     regen15
           sub.l     d0,d1
-          move.l    mrk+old+4,d0
-          sub.l     mrk+old,d0
+          move.l    mrk+OLD+4,d0
+          sub.l     mrk+OLD,d0
           sub.l     d1,d0
           bne.s     regen15
-          bclr.b    #7,part(a2)
-          clr.l     old+4(a2)
+          bclr.b    #7,PART(a2)
+          clr.l     OLD+4(a2)
           bra.s     regen14
-regen15   clr.l     old+4(a2)
+regen15   clr.l     OLD+4(a2)
           move.w    mark_buf+2,d0
           bne.s     regen16
-          move.w    d1,old+4(a2)
+          move.w    d1,OLD+4(a2)
 regen16   move.w    mark_buf+4,d0
           bne.s     regen14
           swap      d1
-          move.w    d1,old+6(a2)
-regen14   move.l    old(a2),d0
-          move.l    old+4(a2),28(a0)
-          add.l     old+8(a2),d0
+          move.w    d1,OLD+6(a2)
+regen14   move.l    OLD(a2),d0
+          move.l    OLD+4(a2),28(a0)
+          add.l     OLD+8(a2),d0
           move.l    d0,24(a0)
-regen13   move.l    bild_adr(a4),a1
+regen13   move.l    BILD_ADR(a4),a1
           move.l    bildbuff,20(a0)
           lea       win_xy,a0
           clr.l     (a0)+
           move.l    #$27f018f,(a0)
-          bsr       fram_ins            Auss einsetzen
+          bsr       fram_ins            insert/commit selection
           lea       mrk,a0
-          move.b    stack+12,vmod(a0)
+          move.b    stack+12,VMOD(a0)
           move.l    rec_adr,a4
           bsr       men_inv
           bra       win_rdw
           ;
 regen10   move.l    bildbuff,a0         ++ NORM-Mode ++
-          move.l    bild_adr(a4),a1
-          move.w    #3999,d1            Bilder vertauschen
+          move.l    BILD_ADR(a4),a1
+          move.w    #3999,d1            swap images
 regen1    move.l    (a0),d0
           move.l    (a1),(a0)+
           move.l    d0,(a1)+
@@ -528,7 +452,7 @@ regen1    move.l    (a0),d0
           move.l    (a1),(a0)+
           move.l    d0,(a1)+
           dbra      d1,regen1
-          move.b    drawflag+1,d0       Verschiebung ?
+          move.b    drawflag+1,d0       moving?
           beq       regen2
           lea       drawflag+4,a0
           lea       mark_buf,a1
@@ -540,25 +464,25 @@ regen1    move.l    (a0),d0
           move.l    d0,(a1)
           move.l    d1,4(a1)
           bpl.s     regen4
-          clr.w     -2(a1)              ++ Rahmen lîschen ++
+          clr.w     -2(a1)              ++ clear window frame ++
           move.l    menu_adr,a2
           bset.b    #3,1667(a2)
-          cmp.l     #$12345678,8(a0)    EinfÅgen erlaubt ?
+          cmp.l     #$12345678,8(a0)    is pasting allowed?
           beq.s     regen7
-          bclr.b    #3,1643(a2)         -> EinfÅgen enabeln
-          move.w    #$ff00,mrk+einf
-          move.l    bild_adr(a4),8(a0)
+          bclr.b    #3,1643(a2)         yes -> enable paste
+          move.w    #$ff00,mrk+EINF
+          move.l    BILD_ADR(a4),8(a0)
 regen7    add.w     #1739,a2
           moveq.l   #7,d0
 regen3    bset.b    #3,(a2)
           add.w     #24,a2
           dbra      d0,regen3
           bra.s     regen2
-regen4    move.l    menu_adr,a0         ++ Rahmen erzeugen ++
+regen4    move.l    menu_adr,a0         ++ Generated frame ++
           bset.b    #3,1643(a0)
-          move.b    mrk+ov,d0
+          move.b    mrk+OV,d0
           beq.s     regen6
-          bclr.b    #3,1643(a0)         Wegwerfen enabeln
+          bclr.b    #3,1643(a0)         Enable discard
           bclr.b    #3,1667(a0)
 regen6    add.w     #1739,a0
           moveq.l   #7,d0
@@ -570,45 +494,45 @@ regen2    bsr       men_inv
           ;
 zwei_1b   cmp.b     #$1b,d0
           bne       zwei_19
-          move.w    (a4),d0             --- Drucken ---
+          move.w    WIN_HNDL(a4),d0    --- Command: Print ---
           bmi       men_inv
           moveq.l   #1,d0
           lea       stralpr2,a0
           bsr       alertbox
           cmp.w     #1,d0
           bne       men_inv
-druck6    move.w    #$11,-(sp)          Drucker angeschlossen ?
+druck6    move.w    #$11,-(sp)          printer connected?
           trap      #1
           addq.l    #2,sp
           tst.w     d0
           bmi.s     druck4
           moveq.l   #1,d0
-          lea       stralpr1,a0         nein -> Warten
+          lea       stralpr1,a0         no -> wait
           bsr       alertbox
           cmp.w     #1,d0
           bne       men_inv
           bra       druck6
-druck4    lea       form_buf,a5         Clipping-rectangle berechnen
+druck4    lea       form_buf,a5         calc clipping-rectangle
           move.b    frdrucke+7,d0
           bne.s     druck21
-          clr.l     (a5)                Total
+          clr.l     (a5)                total
           move.l    #$27f018f,4(a5)
           bra.s     druck20
 druck21   cmp.b     #1,d0
           bne.s     druck22
-          move.l    fenster(a4),d0      Fenster
-          move.l    fenster+4(a4),d1
-          add.w     yx_off(a4),d0
-          add.l     yx_off+2(a4),d0
+          move.l    FENSTER(a4),d0      window
+          move.l    FENSTER+4(a4),d1
+          add.w     YX_OFF(a4),d0
+          add.l     YX_OFF+2(a4),d0
           add.l     d0,d1
           sub.l     #$10001,d1
           move.l    d0,(a5)
           move.l    d1,4(a5)
           bra.s     druck20
-druck22   moveq.l   #3,d2               Koordinaten
+druck22   moveq.l   #3,d2               ask for coordinates
           lea       contrl,a5
           bsr       get_koos
-          cmp.w     #7,d4               Abbruch-Taste ?
+          cmp.w     #7,d4               cancelled by user?
           beq       men_inv
           lea       form_buf,a5
           move.l    last_koo,(a5)
@@ -616,114 +540,114 @@ druck22   moveq.l   #3,d2               Koordinaten
 druck20   lea       contrl,a5
           bsr       maus_bne
           lea       form_buf,a5
-          move.l    bild_adr(a4),a6
-          lea       escfeed,a2          Druckzeilenabstand = 1/8 inch
+          move.l    BILD_ADR(a4),a6
+          lea       escfeed,a2          printing line delta = 1/8 inch
           bsr       prtout
-          move.b    frdrucke+5,d0       Hoch- oder Querformat ?
-          bne.s     druck10
-          sub.l     a3,a3               +++ Hochformat +++
+          move.b    frdrucke+5,d0       Portrait or landscape format?
+          bne       druck10
+          sub.l     a3,a3               +++ Portrait format +++
           move.w    2(a5),d0
-          move.w    d0,a4               A3/A4: X/Y-Koordinate
+          move.w    d0,a4               A3/A4: X/Y-coord.
           mulu.w    #80,d0
           add.w     d0,a6
-druck5    moveq.l   #79,d6              80 Zeichen pro Zeile a 8 Pixel
+druck5    moveq.l   #79,d6              80 characters per line, 8 pixels each
           lea       stack,a0
-druck3    move.w    #128,d4             Pos im Zeichen, horizontal
-druck7    moveq.l   #1,d5               Pinnummer und -zÑhler
-          clr.w     d1                  Sendebyte
+druck3    move.w    #128,d4             pos within char, hor.
+druck7    moveq.l   #1,d5               pin number and counter
+          clr.w     d1                  byte to send
           move.w    a3,d0
-          cmp.w     (a5),d0             X-Pos im clip-rec ?
+          cmp.w     (a5),d0             X-pos within clipping-rect.?
           blo.s     druck8
           cmp.w     4(a5),d0
           bhi.s     druck9
-          add.w     #640,a6             Offset zu A6 im Byte
+          add.w     #640,a6             offset to A6 within byte
           addq.w    #8,a4
 druck2    sub.w     #80,a6
           subq.w    #1,a4
           move.b    (a6),d0
           and.b     d4,d0
           beq.s     druck1
-          move.w    a4,d0               Y-Pos im clip-rec ?
+          move.w    a4,d0               Y-pos within clipping-rect.?
           cmp.w     6(a5),d0
           bhi.s     druck1
           or.b      d5,d1
-druck1    lsl.b     #1,d5               nÑchster Pixel vertikal
+druck1    lsl.b     #1,d5               next pixel vertically
           bcc       druck2
 druck8    move.b    d1,(a0)+
 druck9    addq.w    #1,a3
-          lsr.b     #1,d4               nÑchster Pixel horizontal
+          lsr.b     #1,d4               next pixel horizontally
           bcc       druck7
-          addq.l    #1,a6               nÑchstes Byte
+          addq.l    #1,a6               next byte
           dbra      d6,druck3
-          bsr       druck30             Zeile ausdrucken
-          add.w     #560,a6             nÑchste Zeile
+          bsr       druck30             print line
+          add.w     #560,a6             next line
           addq.w    #8,a4
           sub.l     a3,a3
-          move.w    a4,d0               Y-mÑûig noch im clip-rec ?
+          move.w    a4,d0               veritically still within clipping region?
           cmp.w     6(a5),d0
           bls       druck5
-          lea       contrl,a5           Zeiger regenerieren
+          lea       contrl,a5           restore default address registers
           lea       intin,a6
           bsr       maus_neu
           bra       men_inv
           ;
-druck10   move.w    (a5),d0             +++ Querformat +++
+druck10   move.w    (a5),d0             +++ Landscape format +++
           move.w    d0,d3
           lsr.w     #3,d3
           and.w     #7,d0
           lea       drucktab,a0
-          move.b    (a0,d0.w),(a5)      (A5): Maske linker Rand
+          move.b    (a0,d0.w),(a5)      (A5): mask left border
           move.w    4(a5),d0
           move.w    d0,d4
-          lsr.w     #3,d4               D3/4: Byte-Min/Max
+          lsr.w     #3,d4               D3/4: byte-min/max
           and.w     #7,d0
-          move.b    8(a0,d0.w),1(a5)    1(a5): Maske rechter Rand
+          move.b    8(a0,d0.w),1(a5)    1(a5): mask of right border
           move.w    6(a5),d0
           move.w    d0,d1
-          sub.w     2(a5),d0            Y-clipping umrechnen
+          sub.w     2(a5),d0            convert Y-clipping
           move.w    d0,2(a5)
           mulu.w    #80,d1
           add.w     #81,d1
-          move.w    d1,4(a5)            4(A5): Zeilenende-Offset
+          move.w    d1,4(a5)            4(A5): line end offset
           move.w    d4,d7
           add.w     d4,a6
-druck11   cmp.b     d3,d7               X-Pos im clip-rec ?
-          blo.s     druck15             nein -> fertig
+druck11   cmp.b     d3,d7               X-pos within clipping rect.?
+          blo.s     druck15             no -> done
           lea       stack,a0
           move.w    6(a5),d6
 druck12   clr.b     d0
-          cmp.w     2(a5),d6            Y-Pos im clip-rec ?
+          cmp.w     2(a5),d6            Y-pos within clipping rect.?
           bhi.s     druck14
           move.b    (a6),d0
-          cmp.b     d3,d7               Byte X-mÑûig clippen
+          cmp.b     d3,d7               Clip byte within range
           bne.s     druck13
           and.b     (a5),d0
 druck13   cmp.b     d4,d7
           bne.s     druck14
           and.b     1(a5),d0
 druck14   moveq.l   #7,d1
-druck17   lsr.b     #1,d0               Byte spiegeln
+druck17   lsr.b     #1,d0               mirror byte
           roxl.b    #1,d2
           dbra      d1,druck17
           move.b    d2,(a0)+
-          add.w     #80,a6              nÑchste Scanline
+          add.w     #80,a6              next scan line
           dbra      d6,druck12
-          bsr.s     druck30             Zeile ausdrucken
-          sub.w     4(a5),a6            nÑchste Spalte
+          bsr.s     druck30             print line
+          sub.w     4(a5),a6            next row
           dbra      d7,druck11
-druck15   lea       contrl,a5
+druck15   lea       contrl,a5           restore default address registers
           lea       intin,a6
           bsr       maus_neu
           bra       men_inv
           ;
-druck30   move.l    a0,-(sp)            +++ Graphikzeile drucken +++
+druck30   move.l    a0,-(sp)            +++ Print a line of graphical data +++
           move.w    #-1,-(sp)
           move.w    #11,-(sp)           kbshift
           trap      #13
           addq.l    #4,sp
-          btst      #3,d0               Alternate gedrÅckt ?
+          btst      #3,d0               ALT key pressed?
           beq.s     druck37
-          moveq.l   #2,d0               -> "Druck abbrechen ?"
+          moveq.l   #2,d0               yes -> ask to confirm cancelling print
           lea       stralpr3,a0
           bsr       alertbox
           cmp.b     #1,d0
@@ -736,7 +660,7 @@ druck31   cmp.l     a2,a0
           bls.s     druck33
           tst.b     -(a0)
           beq       druck31
-          move.l    a0,d5               LÑnge der Zeile berechnen
+          move.l    a0,d5               calculate length of line
           sub.l     a2,d5
           move.w    d5,d0
           addq.w    #1,d0
@@ -752,7 +676,7 @@ druck31   cmp.l     a2,a0
 druck39   lsl.w     #1,d0
           subq.w    #1,d0
 druck38   ror.w     #8,d0
-          lea       eschigh,a2          Header senden
+          lea       eschigh,a2          send header
           move.w    d0,2(a2)
           move.w    d5,-(sp)
           moveq.l   #3,d5
@@ -762,16 +686,16 @@ druck40   clr.w     d0
           dbra      d5,druck40
           move.w    (sp)+,d5
           lea       stack,a2
-druck32   clr.w     d0                  Graphik senden
+druck32   clr.w     d0                  send graphical data
           move.b    (a2),d0
           bsr       chrout
-          btst      #1,d6               1: Flag fÅr Verdopplung
+          btst      #1,d6               1: flag for double-size
           bne.s     druck36
-          btst      #0,d6               0: Flag fÅr nicht-verÑnd.
+          btst      #0,d6               0: flag for non-modif.(?)
           beq.s     druck34
-          btst      #2,d6               2: Flag fÅr jedes 2. Byte
+          btst      #2,d6               2: flag for every 2nd byte
           beq.s     druck35
-druck36   bchg      #3,d6               3: Flag fÅr Wiederholung
+druck36   bchg      #3,d6               3: flag for repetition
           bne       druck32
 druck35   bchg      #2,d6
 druck34   addq.l    #1,a2
@@ -785,12 +709,12 @@ zwei_19   cmp.b     #$19,d0
           beq.s     save18
           cmp.b     #$1a,d0
           bne       men_inv
-save18    move.b    frdatei+33,d0       --- (Ab-)Speichern ---
+save18    move.b    frdatei+33,d0       --- Command: Save ---
           bne       save3
-          move.b    frdatei+35,d0       +++ Format OHNE +++
+          move.b    frdatei+35,d0       +++ Format RAW +++
           bne.s     save4
           move.l    #32000,d7           Total
-          move.l    bild_adr(a4),a3
+          move.l    BILD_ADR(a4),a3
 save_all  clr.l     d6
           bsr       save_opn
           bsr       maus_bne
@@ -799,69 +723,69 @@ save_all  clr.l     d6
           bra       save_wrt
 save4     cmp.b     #2,d0
           bne.s     save5
-          moveq.l   #3,d2               Koordinaten
+          moveq.l   #3,d2               coordinates
           bsr       get_koos
           cmp.w     #7,d4
           beq       men_inv
           move.l    (a1),d4
           move.l    4(a1),d5
           bra.s     save7
-save5     move.l    fenster(a4),d4      Fenster
-          move.l    fenster+4(a4),d5
-          add.w     yx_off(a4),d4
-          add.l     yx_off+2(a4),d4
+save5     move.l    FENSTER(a4),d4      window
+          move.l    FENSTER+4(a4),d5
+          add.w     YX_OFF(a4),d4
+          add.l     YX_OFF+2(a4),d4
           add.l     d4,d5
           sub.l     #$10001,d5
 save7     move.l    d5,d2
           sub.l     d4,d2
-          add.l     #$10001,d2          D2: Breite/Hîhe
+          add.l     #$10001,d2          D2: width/height
           move.l    d2,d0
           swap      d0
-          cmp.b     #2,frdatei+33       LOGO-Format ?
+          cmp.b     #2,frdatei+33       LOGO format?
           bne.s     save14
-          and.w     #15,d0              geht Breite in Wîrtern auf ?
+          and.w     #15,d0              is width a multiple of words?
           beq.s     save8
           and.l     #$3f003ff,d2
           add.l     #$100000,d2
           bra.s     save8
-save14    and.w     #7,d0               geht Breite in Bytes auf ?
+save14    and.w     #7,d0               is width a multiple of bytes?
           beq.s     save8
           lea       stralbyt,a0
           moveq.l   #1,d0
-          bsr       alertbox            "Runden ?"
+          bsr       alertbox            no -> ask for confirmation "OK to round up?"
           cmp.w     #2,d0
-          beq       men_inv             Abbruch
+          beq       men_inv             not confirmed -> abort
           and.l     #$3f803ff,d2
           add.l     #$80000,d2
-save8     cmp.l     #$2800000,d2        640 Pixel breit ?
+save8     cmp.l     #$2800000,d2        width 640 pixels?
           blo.s     save10
-          move.w    d2,d7               -> Total-Routine verwenden
+          move.w    d2,d7               yes -> use function for complete save
           mulu.w    #80,d7
-          move.l    bild_adr(a4),a3
+          move.l    BILD_ADR(a4),a3
           mulu.w    #80,d4
           add.l     d4,a3
           bra       save_all
-save10    lea       form_buf,a0         Grîûe retten
+save10    lea       form_buf,a0         backup size
           move.l    d2,(a0)
-          move.w    d2,d6               D6: RAM-Bedarf
+          move.w    d2,d6               D6: memory requirement
           mulu.w    #80,d6
-          bsr       save_opn            Datei kreieren
+          bsr       save_opn            create file
           move.l    a3,-(sp)
           move.l    d4,d0
           move.l    d5,d1
-          clr.l     d2                  Bild in Buffer kopieren
-          move.l    bild_adr(a4),a0
-          move.l    a3,a1               A3: Scratch-Buffer
+          clr.l     d2                  copy image data to buffer
+          move.l    BILD_ADR(a4),a0
+          move.l    a3,a1               A3: scratch buffer
           bsr       copy_blk
-          bsr       maus_bne            Biene-Maus
+          bsr       maus_bne            switch mouse form to "bee"
           cmp.b     #2,frdatei+33
           bne.s     save13
-          lea       logo_buf,a0         LOGO -> Header speichern
+          lea       logo_buf,a0         LOGO format -> save header
           moveq.l   #10,d0
           bsr       save_dat
 save13    move.w    form_buf,d0
           lsr.w     #3,d0
-          move.l    (sp),a0             Bild komprimieren
+          move.l    (sp),a0             compress image
           move.l    a0,a1
           add.w     #80,a0
           add.w     d0,a1
@@ -875,31 +799,31 @@ save12    move.b    (a0)+,(a1)+
           dbra      d3,save12
           add.w     d1,a0
           dbra      d2,save11
-          move.w    #$49,-(sp)          (Adr schon auf Stack)
+          move.w    #$49,-(sp)          (addr. already on stack)
           trap      #1
           addq.l    #2,sp
           move.w    form_buf,d0
           lsr.w     #3,d0
-          mulu.w    form_buf+2,d0       +++ Daten abspeichern +++
+          mulu.w    form_buf+2,d0       +++ save data +++
           move.l    d0,-(sp)
 save_wrt  move.w    handle,-(sp)
           move.w    #$40,-(sp)
           trap      #1
           add.w     #12,sp
-          tst.l     d0                  Fehler ?
+          tst.l     d0                  error?
           bpl.s     save1
           bsr       tos_err
           bra.s     save2
-save1     and.b     #%11110101,info(a4) Fenster-sicher-Flag
+save1     and.b     #%11110101,INFO(a4) window-save-Flag
 save2     move.w    handle,-(sp)        ;close
           move.w    #$3e,-(sp)
           trap      #1
           addq.l    #4,sp
-          bsr       maus_neu            Norm-Maus
+          bsr       maus_neu            restore normal mouse form
           bra       men_inv
-save_opn  move.l    bild_adr(a4),a0     +++ Filenamen holen +++
+save_opn  move.l    BILD_ADR(a4),a0     +++ ask user for file name +++
           add.w     #32010,a0
-          moveq.l   #-1,d3              D3: Parameter fÅr itemslct
+          moveq.l   #-1,d3              D3: parameter for itemslct
           move.l    a0,a2
 save_op4  move.b    (a0)+,d0
           beq.s     save_op3
@@ -910,19 +834,19 @@ save_op4  move.b    (a0)+,d0
 save_op3  lea       filename,a0
 save_op5  move.b    (a2)+,(a0)+
           bne       save_op5
-save_op6  cmp.w     #$1a,msg_buff+8     "Abspeichern" ?
+save_op6  cmp.w     #$1a,msg_buff+8     "Save"?
           bne.s     save_op7
-          move.l    bild_adr(a4),a2
+          move.l    BILD_ADR(a4),a2
           add.w     #32010,a2
           tst.b     (a2)
           beq.s     save_op7
           moveq.l   #$7f,d3
           bsr       itemauto
           bra.s     save_op8
-save_op7  bsr       itemslct            Dateiname erfragen
+save_op7  bsr       itemslct            open file slection dialog
 save_op8  tst.b     d0
           bne.s     save_op1
-          tst.l     d6                  +++ Scratch-Buffer holen +++
+          tst.l     d6                  +++ get scratch buffer +++
           beq.s     save_o10
           move.l    d6,-(sp)
           move.w    #$48,-(sp)
@@ -936,24 +860,24 @@ save_o10  clr.w     -(sp)               ;create
           move.w    #$3c,-(sp)
           trap      #1
           addq.l    #8,sp
-          tst.l     d0                  Fehler ?
+          tst.l     d0                  error?
           bmi.s     save_op2
           move.w    d0,handle
-          move.l    bild_adr(a4),a0
+          move.l    BILD_ADR(a4),a0
           add.w     #32010,a0
-          tst.b     (a0)                Titel schon gesetzt ?
+          tst.b     (a0)                window title already set?
           beq       set_name
           rts
-save_op2  addq.l    #4,sp               Fehlernummer ausgeben
+save_op2  addq.l    #4,sp               notify user about TOS error
           bra       tos_err
-save_op1  addq.l    #4,sp               Abbruch
+save_op1  addq.l    #4,sp               abort
           bra       men_inv
 save3     cmp.b     #2,d0
           bne.s     save15
           lea       logo_buf,a3         +++ Format LOGO +++
           move.w    #1,(a3)
-          move.l    fenster(a4),2(a3)
-          move.l    fenster+4(a4),6(a3)
+          move.l    FENSTER(a4),2(a3)
+          move.l    FENSTER+4(a4),6(a3)
           move.w    2(a3),d0
           add.w     6(a3),d0
           sub.w     #640,d0
@@ -970,7 +894,7 @@ save15    clr.l     d6                  +++ Format DEGAS +++
           lea       stack,a3
           move.w    #1,(a3)
           add.w     #34,a3
-          moveq.l   #15,d3              col-pal speichern
+          moveq.l   #15,d3              save color palette
 save17    move.w    #-1,-(sp)
           move.w    d3,-(sp)
           move.w    #7,-(sp)
@@ -981,11 +905,11 @@ save17    move.w    #-1,-(sp)
           dbra      d3,save17
           lea       stack,a0
           moveq.l   #34,d0
-          bsr.s     save_dat            Header speichern
-          move.l    bild_adr(a4),-(sp)
-          move.l    #32000,-(sp)        Bild speichern
+          bsr.s     save_dat            save header
+          move.l    BILD_ADR(a4),-(sp)
+          move.l    #32000,-(sp)        save image data
           bra       save_wrt
-save_dat  move.l    a0,-(sp)            +++ Daten abspeichern +++
+save_dat  move.l    a0,-(sp)            +++ Save image data +++
           move.l    d0,-(sp)
           move.w    handle,-(sp)
           move.w    #$40,-(sp)
@@ -993,23 +917,27 @@ save_dat  move.l    a0,-(sp)            +++ Daten abspeichern +++
           add.w     #12,sp
           rts
           ;
+*---------------------------------------------------------------------
+*               S H A P E S   M E N U
+*---------------------------------------------------------------------
+          ;
 nr_drei   cmp.l     #$60000,d0
           bhs       nr_vier
-          cmp.b     #$2e,d0             ******** Figuren-MenÅ ********
+          cmp.b     #$2e,d0
           bhs       drei_2e
-          move.w    d0,d2               --- Figur auswÑhlen ---
+          move.w    d0,d2               --- Shape selection ---
           move.w    choofig,d0
           cmp.w     #$43,d0
           bne.s     drei_chg
-          bsr       over_que            "Markieren beenden" ?
+          bsr       over_que            ask to confirm "commit selection?"
           bne       men_inv
           move.w    d2,-(sp)
           bsr       fram_del
           move.w    (sp)+,d2
-drei_chg  move.w    choofig,d0          alte Figur disabeln
+drei_chg  move.w    choofig,d0          disable prev. tool
           clr.w     d1
           bsr       check_xx
-          move.w    d2,d0               neue enabeln
+          move.w    d2,d0               enable new tool
           lea       choofig,a0
           move.w    d2,(a0)
           moveq.l   #1,d1
@@ -1028,21 +956,21 @@ drei_chg  move.w    choofig,d0          alte Figur disabeln
           cmp.b     #$29,d2
           beq.s     figur1
           addq.l    #1,a0
-figur1    moveq.l   #3,d0               entspr. Attribute enabeln
+figur1    moveq.l   #3,d0               enable resp. attributes
           move.l    menu_adr,a3
-          add.w     #1115,a3            Adr. der Status: 43*24+11
+          add.w     #1115,a3            addr. of state: 43*24+11
 figur2    bset      #3,(a3)
           btst.b    d0,(a0)
           beq.s     figur3
           bclr      #3,(a3)
 figur3    add.w     #24,a3
           dbra      d0,figur2
-          bsr       koo_chk             "Koordinaten"-Status setzen
+          bsr       koo_chk             disable "Coordinates" if needed
           bra       men_inv
           ;
 drei_2e   cmp.w     #$31,d0
           beq.s     drei_31
-          move.w    d0,d1               --- Attribute umschalten ---
+          move.w    d0,d1               --- Switch tool attributes ---
           move.w    d0,d2
           sub.w     #$2e,d1
           lsl.w     #1,d1
@@ -1066,11 +994,11 @@ drei_11   move.w    d1,(a0)
           bsr       check_xx
           bra       men_inv
           ;
-drei_31   moveq.l   #2,d2               --- Segment ---
+drei_31   moveq.l   #2,d2               --- Tool: Arc ---
           lea       frsegmen,a2
           bsr       form_do
           bsr       form_del
-          move.w    frsegmen+6,d3       Winkel-10tel errechnen
+          move.w    frsegmen+6,d3       calc 10th of degree
           mulu.w    #10,d3
           add.w     frsegmen+20,d3
           swap      d3
@@ -1081,65 +1009,66 @@ drei_31   moveq.l   #2,d2               --- Segment ---
           lea       chooseg,a0
           move.l    d3,(a0)
           moveq.l   #1,d1
-          cmp.l     #360,d3             Vollen Kreis malen(0-360)?
+          cmp.l     #360,d3             draw complete circle? (i.e. 0-360)
           bne.s     segmen1
           clr.w     d1
-segmen1   lea       chooset+6,a0        nein -> Segment-Eintrag..
+segmen1   lea       chooset+6,a0        no -> check-off "arc" entry
           move.w    d1,(a0)
           moveq.l   #$31,d0
-          bsr       check_xx            ..abhaken
+          bsr       check_xx
           bra       men_inv
           ;
-*----------------------------------------------------------SUBROUTINEN
-prtout    clr.w     d0                  ** String an Drucker senden **
+*---------------------------------------------------------SUBFUNCTIONS
+prtout    clr.w     d0                  ** Send string to printer **
           move.b    (a2)+,d0
-          beq.s     prtout1             zero-terminated -> fertig
+          beq.s     prtout1             zero-terminated -> done
           bsr.s     chrout
           tst.w     d0
           bne       prtout
 prtout1   rts
           ;
-chrout    move.w    d0,-(sp)            ** 1 Zeichen ausdrucken **
+chrout    move.w    d0,-(sp)            ** print one byte **
           move.w    #5,-(sp)
           trap      #1
           addq.l    #4,sp
           rts
           ;
-koo_chk   move.l    menu_adr,a0         "Koordinaten" en-/disabeln
+koo_chk   move.l    menu_adr,a0         Enable/disable "Coordinates"
           bclr.b    #3,2075(a0)
           move.w    choofig,d0
           cmp.b     #$55,d0
           beq.s     koo_chk2
           cmp.b     #$43,d0
-          beq       exit
+          beq.s     koo_chk3
           lea       koanztab,a1
           sub.w     #$1f,d0
           tst.b     (a1,d0.w)
-          bne       exit
+          bne.s     koo_chk3
 koo_chk2  bset.b    #3,2075(a0)
-          rts
+koo_chk3  rts
           ;
-wind_chg  btst.b    #1,info(a4)         ** Bild bearbeitet ? **
+wind_chg  btst.b    #1,INFO(a4)         ** Image modified? **
           bne.s     wind_ch1
           move.w    drawflag,d0
           beq.s     wind_ch1
-          bchg.b    #3,info(a4)
-          bchg.b    #3,info(a4)
+          bchg.b    #3,INFO(a4)
+          bchg.b    #3,INFO(a4)
 wind_ch1  rts
           ;
-over_que  move.w    mark_buf,d0         ** "Ausschnitt einfÅgen" ? **
-          beq       exit
-          move.b    mrk+ov,d0
-          beq       exit
-          move.b    mrk+chg,d0
-          beq       exit
+over_que  move.w    mark_buf,d0         ** Ask for confirmation "Commit selection?" **
+          beq.s     over_qrts
+          move.b    mrk+OV,d0
+          beq.s     over_qrts
+          move.b    mrk+CHG,d0
+          beq.s     over_qrts
           moveq.l   #1,d0
           lea       stralovq,a0
           bsr.s     alertbox
           cmp.w     #1,d0
-          rts
+over_qrts rts
+          ;
 alertbox  ;
-          aes       52 1 1 1 0 !d0 !a0  ** AES-Alertbox ausfÅhren **
+          aes       52 1 1 1 0 !d0 !a0  ** Execute AES-alert dialog **
           move.w    intout,-(sp)
           bsr       maus_neu
           lea       intout,a0
@@ -1153,14 +1082,14 @@ itemslct  lea       directory,a2        ** Item-Selector **
           bne.s     itemserr
 itemauto  cmp.b     #':',1(a2)
           bne.s     items1
-          move.b    (a2),d0             Drive setzen
+          move.b    (a2),d0             set drive
           sub.b     #'A',d0
           move.w    d0,-(sp)
           move.w    #$e,-(sp)
           trap      #1
           addq.l    #4,sp
           addq.l    #2,a2
-items1    move.l    a2,a0               Pfad setzen
+items1    move.l    a2,a0               set path
           move.l    a2,a1
 items2    tst.b     (a2)
           beq.s     items3
@@ -1178,46 +1107,46 @@ items3    move.l    a1,a2
           move.b    d2,(a2)
           tst.w     d0
           bne       itemslct
-          pea       dta                 DTA-Buffer setzen
+          pea       dta                 set DTA-buffer
           move.w    #$1a,-(sp)
           trap      #1
           addq.l    #6,sp
-          clr.w     -(sp)               Datei suchen
+          clr.w     -(sp)               search file
           pea       filename
           move.w    #$4e,-(sp)
           trap      #1
           addq.l    #8,sp
-          tst.w     d0                  existiert die Datei ?
+          tst.w     d0                  does this file exist?
           beq.s     items4
-          tst.w     d3                  + Nein +
-          bne.s     itemsok             Speichern -> Egal
+          tst.w     d3                  + file does not exist +
+          bne.s     itemsok             is for saving -> ok
           lea       stralnof,a0
-          moveq.l   #2,d0               "Nicht gefunden"
+          moveq.l   #2,d0               error "file not found"
           bsr       alertbox
           cmp.w     #1,d0
           beq       itemslct
 itemserr  moveq.l   #-1,d0
           rts
-items4    tst.w     d3                  + Ja +
-          beq.s     itemstak            Laden -> Ok
-          lea       stralfsd,a0         "Datei Åberschreiben ?"
+items4    tst.w     d3                  + file exists +
+          beq.s     itemstak            is for loading -> ok
+          lea       stralfsd,a0         ask for confirmation to overwrite
           moveq.l   #1,d0
           bsr       alertbox
           cmp.w     #1,d0
           bne       itemserr
-itemstak  moveq.l   #7,d0               Filenamen kopieren
+itemstak  moveq.l   #7,d0               copy file name
           lea       dta+30,a0
           lea       filename,a1
 items5    move.b    (a0)+,(a1)+
           dbra      d0,items5
-itemsok   clr.b     d0                  D0 = 0 -> Ok
+itemsok   clr.b     d0                  D0 = 0 -> ok
           rts
           ;
-set_name  move.l    bild_adr(a4),a0     ** Fenstertitel setzen **
+set_name  move.l    BILD_ADR(a4),a0     ** Set window title **
           add.w     #32010,a0
-          lea       director,a1
+          lea       directory,a1
           move.l    a0,a2
-set_nam1  move.b    (a1)+,d0            Drive und Pfadname
+set_nam1  move.b    (a1)+,d0            drive and path name
           move.b    d0,(a0)+
           beq.s     set_nam2
           cmp.b     #'\',d0
@@ -1226,23 +1155,23 @@ set_nam1  move.b    (a1)+,d0            Drive und Pfadname
           bra       set_nam1
 set_nam2  move.l    a2,a0
           lea       filename,a1
-set_nam3  move.b    (a1)+,(a0)+         File-Name
+set_nam3  move.b    (a1)+,(a0)+         file name
           bne       set_nam3
-          move.l    bild_adr(a4),a0
+          move.l    BILD_ADR(a4),a0
           add.w     #32010,a0
           tst.b     (a0)
           beq.s     name_xx
-          move.l    menu_adr,a1         Abspeichern enabeln
+          move.l    menu_adr,a1         enable saving
           bclr.b    #3,635(a1)
 name_xx   move.l    a0,4(a6)
-          aes       105 4 1 0 0 !(a4) 2  ;wind_set: Fenstertitel
+          aes       105 4 1 0 0 !(a4) 2  ;wind_set: window title
           rts
           ;
-get_koos  lea       frkoordi,a2         ** Koordinaten erfragen **
+get_koos  lea       frkoordi,a2         ** Ask for Coordinates **
           moveq.l   #3,d1
           bsr       rsrc_gad
           move.l    addrout,a3
-          bsr       init_ted            Adressen im TED-Record setzen
+          bsr       init_ted            write addresses into TED-record
           addq.l    #2,a2
           move.w    #8,128(a3)
           lea       last_koo,a1
@@ -1251,10 +1180,10 @@ get_koos  lea       frkoordi,a2         ** Koordinaten erfragen **
           bhi.s     get_koo1
           addq.l    #4,a1
           move.w    #128,128(a3)
-get_koo1  move.l    ted_adr(a2),a0
+get_koo1  move.l    TED_ADR(a2),a0
           move.w    (a1)+,d0
-          move.w    d0,ted_val(a2)
-          bsr       form_wrt            Pos. in Formular eintragen
+          move.w    d0,TED_VAL(a2)
+          bsr       form_wrt            print pos. value into dialog
           add.w     #14,a2
           dbra      d2,get_koo1
           moveq.l   #3,d2
@@ -1263,7 +1192,7 @@ get_koo1  move.l    ted_adr(a2),a0
           bsr       form_del
           lea       last_koo,a1
           move.w    (sp)+,d2
-          cmp.w     #1,d2               nur ein Koordinatenpaar ?
+          cmp.w     #1,d2               single pair of coordinates?
           bhi.s     get_koo3
           sub.w     #28,a2
           bra.s     get_koo4
@@ -1272,7 +1201,7 @@ get_koo3  move.w    6(a2),(a1)
 get_koo4  move.w    34(a2),4(a1)
           move.w    48(a2),6(a1)
           rts
-*--------------------------------------------------------MENU-VARIABLE
+*-------------------------------------------------------MENU-VARIABLES
 choofig   dc.w   $1f
 chooseg   dc.w   0,3600
 chooset   dc.w   0,0,1,0
@@ -1282,31 +1211,42 @@ now_offs  dc.w   539,72,48,1344,24
 nulstr    dc.b   0,0
 directory ds.w   35
 filename  dcb.w  7,0
-stralneu  dc.b   91,49,93,91,'Ihre Arbeit wird so vernichtet !'
-          dc.b   93,91,'Ok|Abbruch',93,0,0
-stralnof  dc.b   91,50,93,91,'Datei nicht gefunden...|Eine andere D'
-          dc.b   'atei laden ?',93,91,'Ja|Nein',93,0,0
-stralnds  dc.b   91,51,93,91,'Auf der Disk ist nicht mehr|genug fre'
-          dc.b   'ier Speicher|vorhanden !',93,91,'Abbruch',93,0,0
-stralfsd  dc.b   91,49,93,91,'Damit  verwerfen Sie|den Inhalt der '
-          dc.b   'Datei|gleichen Namens!',93,91,'Ok|Abbruch',93,0
-stralbyt  dc.b   91,50,93,91,'Breite auf Bytes runden...?',93,91
-          dc.b   'Ok|Abbruch',93,0,0
-stralbad  dc.b   91,50,93,91,'Fehlerhaftes Format !!',93,91
-          dc.b   'Abbruch',93,0,0
-stralnow  dc.b   91,51,93,91,'Nur 7 Fenster mîglich...|Schlieûen'
-          dc.b   ' Sie ein anderes',93,91,'Abbruch',93,0,0
-stralpr1  dc.b   91,50,93,91,'Der Drucker ist nicht an !',93,91
-          dc.b   'Ok|Abbruch',93,0,0
-stralpr2  dc.b   91,49,93,91,'Starten Sie mit Return|Unterbreche'
-          dc.b   'n mit Alternate',93,91,'Ok|Abbruch',93,0,0
-stralpr3  dc.b   91,51,93,91,'Druck abbrechen ?',93,91,'Ja|Wei'
-          dc.b   'ter',93,0,0
-stralwi7  dc.b   91,49,93,91,'Bei 7 Fenstern sind keine|Accessor'
-          dc.b   'ies mîglich !',93,91,'Ok|Abbruch',93,0,0
-stralnom  dc.b   91,51,93,91,'Der Arbeitsspeicher reicht nicht meh'
-          dc.b   'r |fÅr dieses Fenster !',93,91,'Abbruch',93,0,0
-stralovq  dc.b   91,49,93,91,'Sie fÅgen so den Ausschnitt|ein und Åberschreiben|den Hintergrund !!',93,91,'Ok|Abbruch',93,0,0
+stralneu  dc.b   '[1][Please confirm discarding|'
+          dc.b   'your work!'
+          dc.b   '][Ok|Cancel]',0
+stralnof  dc.b   '[2][File not found!|'
+          dc.b   'Choose another file?'
+          dc.b   '][Ja|Nein]',0
+stralnds  dc.b   '[3][Not enough space on disk'
+          dc.b   '][Cancel]',0
+stralfsd  dc.b   '[1][File with this name already|'
+          dc.b   'exists! Overwrite this file?'
+          dc.b   '][Ok|Cancel]',0
+stralbyt  dc.b   '[2][Image width needs to be|'
+          dc.b   'rounded to multiple of 8'
+          dc.b   '][Ok|Cancel]',0
+stralbad  dc.b   '[2][Invalid file format!'
+          dc.b   '][Cancel]',0
+stralpr1  dc.b   '[2][Printer is not connected!'
+          dc.b   '][Ok|Cancel]',0
+stralpr2  dc.b   '[1][Note: Press Return to start|'
+          dc.b   'Stop with ALT'
+          dc.b   '][Ok|Cancel]',0
+stralpr3  dc.b   '[3][Really cancel printing?'
+          dc.b   '][Yes|Continue]',0
+stralwi7  dc.b   '[1][Note accessories no longer|'
+          dc.b   'work when opening 7 windows!'
+          dc.b   '][Ok|Cancel]',0
+stralnow  dc.b   '[3][Maximum is 7 open windows.|'
+          dc.b   'Please close another one first'
+          dc.b   '][Cancel]',0
+stralnom  dc.b   '[3][Not enough memeory available|'
+          dc.b   'for this window!'
+          dc.b   '][Cancel]',0
+stralovq  dc.b   '[1][You are about to commit the|'
+          dc.b   'selection and overwrite the|'
+          dc.b   'background'
+          dc.b   '][Ok|Cancel]',0
 *------------------------------------------------------------------I/O
 dta       ds.w   25
 logo_buf  ds.w   5
@@ -1315,61 +1255,5 @@ escfeed   dc.b   27,65,8,0
 eschigh   dc.w   $1b4c,0000,0
 drucktab  dc.b   $ff,$7f,$3f,$1f,$0f,$07,$03,$01
           dc.b   $80,$c0,$e0,$f0,$f8,$fc,$fe,$ff
-*---------------------------------------------------------------------
-hexaus    movem.l   d0-d5/a0-a2,-(sp)
-          move.l    d0,d4
-          lea       hexzahl,a2
-          moveq.l   #7,d5
-hexloop   move.b    d4,d0
-          and.b     #$0f,d0
-          add.b     #48,d0
-          cmp.b     #58,d0
-          blt.s     ziffer
-          add.b     #7,d0
-ziffer    move.b    d0,-(a2)
-          lsr.l     #4,d4
-          dbra      d5,hexloop
-          pea       hexstr
-          move.w    #9,-(sp)
-          trap      #1
-          addq.l    #6,sp
-          movem.l   (sp)+,d0-d5/a0-a2
-          rts
-hexstr    dc.b      '########'
-hexzahl   dc.b      13,10,0
-header    dc.b      27,'Y% ',0
-hexraus   movem.l   d0-d3/a0-a3,-(sp)
-          pea       header
-          move.w    #9,-(sp)
-          trap      #1
-          addq.l    #6,sp
-          movem.l   (sp)+,d0-d3/a0-a3
-          movem.l   d0-d3/a0-a3,-(sp)
-*         move.l    d0,d0
-*         bsr       hexaus
-*         move.l    d1,d0
-*         bsr       hexaus
-*         move.l    d2,d0
-*         bsr       hexaus
-*         move.l    d3,d0
-*         bsr       hexaus
-*         move.l    d4,d0
-*         bsr       hexaus
-*         move.l    d5,d0
-*         bsr       hexaus
-*         move.l    d6,d0
-*         bsr       hexaus
-*         move.l    d7,d0
-*         bsr       hexaus
-*         move.w    #1,-(sp)
-*         trap      #1
-*         addq.l    #2,sp
-*         tst.w     d0
-*         beq.s     traprts
-          movem.l   (sp)+,d0-d3/a0-a3
-          rts
-*raprts   movem.l   (sp)+,d0-d3/a0-a3
-*         addq.l    #4,sp
-*         bra       men_inv
           ;
           end
