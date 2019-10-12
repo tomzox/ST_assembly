@@ -791,7 +791,7 @@ text6     move.b    maus_rec+1,d0
           beq.s     text15+2
           move.w    frzeiche+6,d2
           ;
-text15    move.w    d2,(a3)+            +++ daw new string +++
+text15    move.w    d2,(a3)+            +++ draw new string +++
           clr.w     (a3)
           lea       stack,a0
           move.l    a3,d0
@@ -1426,10 +1426,6 @@ last_koo  dcb.l  2,0
 ;          dc.w   0000,0000,00,00,40,0,1,0,0,0
 stralvie  dc.b   '[3][Polygon completed?][Ok|Continue]',0
 stralmax  dc.b   '[3][Maximum is 128 corners!][Abort]',0
-stralove  dc.b   '[1][Do you want to copy the sel-|'
-          dc.b   'ection to this position? This|'
-          dc.b   'will overwrite the background!'
-          dc.b   '][Ok|Cancel]',0
 *---------------------------------------------------------------------
 grhandle  ds.w   1
 appl_id   ds.w   1
@@ -1443,5 +1439,5 @@ intout    ds.w   50
 ptsout    ds.w   20
 addrin    ds.l   3
 addrout   ds.l   3
-stack     dc.w   0
+stack     ds.w   1000 /* FIXME multi-purpose buffer of undefined size */
           END
