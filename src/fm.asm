@@ -30,7 +30,7 @@
  include "f_sys.s"
  include "f_def.s"
  ;
- XREF  aescall,vdicall,contrl,intin,intout,ptsin,addrin,addrout,stack
+ XREF  aescall,vdicall,stack
  XREF  msg_buff,bildbuff,wi1,wi_count,rec_adr,menu_adr,nr_vier,win_xy
  XREF  last_koo,maus_rec,rsrc_gad,save_scr,set_xx,win_rdw,form_wrt,mrk
  XREF  drawflag,fram_del,mark_buf,form_do,form_del,men_inv,form_buf
@@ -39,6 +39,13 @@
  ;
  XDEF  choofig,chooset,chooseg,drei_chg,get_koos,over_que,directory
  XDEF  now_offs,alertbox,evt_menu,wind_chg
+ ;
+**********************************************************************
+*   Global register mapping:
+*
+*   a4   Address of address of current window record
+*   a6   Base address of data section
+**********************************************************************
 
 *---------------------------------------------------------------------
 *               D E S K   M E N U
@@ -73,9 +80,9 @@ mainrts3  moveq.l   #1,d0
           cmp.w     #1,d0
           bne       men_inv
 mainrts1  ;
-          move.l    maus_rec+4,14(a5)
+          move.l    maus_rec+4,CONTRL+14(a6)
           vdi       125 0 0             ;old button-vector
-          move.l    maus_rec+8,14(a5)
+          move.l    maus_rec+8,CONTRL+14(a6)
           vdi       127 0 0             ;old mouse-vector
           aes       111 0 1 0 0         ;rsrc_free
           vdi       101 0 0             ;close_vwork
@@ -146,7 +153,7 @@ open11    move.l    #-1,-(sp)           ;malloc
           rts
 open9     ;
           aes       100 5 1 0 0 $fef 0 18 640 382  ;wind_create
-          move.w    intout,d1
+          move.w    INTOUT+0(a6),d1
           bpl.s     open1
 open2     moveq.l   #1,d0
           lea       stralnow,a0         error creating window -> abort
@@ -211,20 +218,20 @@ open7     moveq.l   #8,d0               slider: position 0
           moveq.l   #16,d0
           move.w    SCHIEBER+6(a4),d1
           bsr       set_xx
-          move.l    FENSTER(a4),8(a6)   ;graf_growbox
-          move.l    FENSTER+4(a4),12(a6)
-          move.l    FENSTER(a4),(a6)
-          move.l    #$100010,4(a6)
+          move.l    FENSTER(a4),INTIN+8(a6)   ;graf_growbox
+          move.l    FENSTER+4(a4),INTIN+12(a6)
+          move.l    FENSTER(a4),INTIN+0(a6)
+          move.l    #$100010,INTIN+4(a6)
           aes       73 8 1 0 0
           move.l    BILD_ADR(a4),a0     set window title
           add.w     #32010,a0
           clr.w     (a0)
           bsr       name_xx
-          move.l    FENSTER(a4),4(a6)
-          move.l    FENSTER+4(a4),8(a6)
+          move.l    FENSTER(a4),INTIN+4(a6)
+          move.l    FENSTER+4(a4),INTIN+8(a6)
           aes       108 6 5 0 0 0 $fef  ;wind_calc
-          move.l    intout+2,2(a6)
-          move.l    intout+6,6(a6)
+          move.l    INTOUT+2(a6),INTIN+2(a6)
+          move.l    INTOUT+6(a6),INTIN+6(a6)
           aes       101 5 1 0 0 !(a4)   ;wind_open
           clr.b     d0
           rts
@@ -530,17 +537,14 @@ druck21   cmp.b     #1,d0
           move.l    d1,4(a5)
           bra.s     druck20
 druck22   moveq.l   #3,d2               ask for coordinates
-          lea       contrl,a5
           bsr       get_koos
           cmp.w     #7,d4               cancelled by user?
           beq       men_inv
-          lea       form_buf,a5
           move.l    last_koo,(a5)
           move.l    last_koo+4,4(a5)
-druck20   lea       contrl,a5
-          bsr       maus_bne
+druck20   bsr       maus_bne
           lea       form_buf,a5
-          move.l    BILD_ADR(a4),a6
+          move.l    BILD_ADR(a4),a6     ATTN local redefinition of A6
           lea       escfeed,a2          printing line delta = 1/8 inch
           bsr       prtout
           move.b    frdrucke+5,d0       Portrait or landscape format?
@@ -586,8 +590,7 @@ druck9    addq.w    #1,a3
           move.w    a4,d0               veritically still within clipping region?
           cmp.w     6(a5),d0
           bls       druck5
-          lea       contrl,a5           restore default address registers
-          lea       intin,a6
+          lea       dsect_a6,a6         restore default address registers
           bsr       maus_neu
           bra       men_inv
           ;
@@ -635,8 +638,7 @@ druck17   lsr.b     #1,d0               mirror byte
           bsr.s     druck30             print line
           sub.w     4(a5),a6            next row
           dbra      d7,druck11
-druck15   lea       contrl,a5           restore default address registers
-          lea       intin,a6
+druck15   lea       dsect_a6,a6         restore default address registers
           bsr       maus_neu
           bra       men_inv
           ;
@@ -1069,16 +1071,16 @@ over_qrts rts
           ;
 alertbox  ;
           aes       52 1 1 1 0 !d0 !a0  ** Execute AES-alert dialog **
-          move.w    intout,-(sp)
+          move.w    INTOUT+0(a6),-(sp)
           bsr       maus_neu
-          lea       intout,a0
+          lea       INTOUT+0(a6),a0
           move.w    (sp)+,d0
           move.w    d0,(a0)             Exit-Taste nach D0
           rts
           ;
 itemslct  lea       directory,a2        ** Item-Selector **
           aes       90 0 2 2 0 !a2 filename
-          cmp.w     #1,intout+2
+          cmp.w     #1,INTOUT+2(a6)
           bne.s     itemserr
 itemauto  cmp.b     #':',1(a2)
           bne.s     items1
@@ -1163,14 +1165,14 @@ set_nam3  move.b    (a1)+,(a0)+         file name
           beq.s     name_xx
           move.l    menu_adr,a1         enable saving
           bclr.b    #3,635(a1)
-name_xx   move.l    a0,4(a6)
+name_xx   move.l    a0,INTIN+4(a6)
           aes       105 4 1 0 0 !(a4) 2  ;wind_set: window title
           rts
           ;
 get_koos  lea       frkoordi,a2         ** Ask for Coordinates **
           moveq.l   #3,d1
           bsr       rsrc_gad
-          move.l    addrout,a3
+          move.l    ADDROUT+0(a6),a3
           bsr       init_ted            write addresses into TED-record
           addq.l    #2,a2
           move.w    #8,128(a3)

@@ -69,22 +69,22 @@ while (<>)
     die "aes: not enough parameters, $ARGV line $.\n" unless defined $saddrout;
     print ";$_".
           "          ;expanding macro ----------\n".
-          "          move.w #$code,(a5)\n".
-          moove("l", sprintf("\$%x", ($sintin<<16)+$sintout),"2(a5)") .
-          moove("l", sprintf("\$%x", ($saddrin<<16)+$saddrout),"6(a5)");
+          "          move.w #$code,CONTRL+0(a6)\n".
+          moove("l", sprintf("\$%x", ($sintin<<16)+$sintout),"CONTRL+2(a6)") .
+          moove("l", sprintf("\$%x", ($saddrin<<16)+$saddrout),"CONTRL+6(a6)");
     my $rest_idx = 0;
     for (my $idx = 0; $idx < $sintin; ++$idx)
     {
       #die "aes: missing INT parameter in  $ARGV line $.\n" unless defined $rest[$rest_idx];
       last if !defined $rest[$rest_idx];
-      print moove("w",$rest[$rest_idx],($idx*2)."(a6)");
+      print moove("w",$rest[$rest_idx],"INTIN+".($idx*2)."(a6)");
       ++$rest_idx;
     }
     for (my $idx = 0; $idx < $saddrin; ++$idx)
     {
       #die "aes: missing ADDR parameter in $ARGV line $.\n" unless defined $rest[$rest_idx];
       last if !defined $rest[$rest_idx];
-      print moove("l",$rest[$rest_idx],"addrin+".($idx*4));
+      print moove("l",$rest[$rest_idx],"ADDRIN+".($idx*4)."(a6)");
       ++$rest_idx;
     }
     print "          bsr aescall\n".
@@ -97,15 +97,15 @@ while (<>)
     die "vdi: not enough parameters, $ARGV line $.\n" unless defined $sintin;
     print ";         $_".
           "          ;expanding macro ----------\n".
-          "          move.l #".sprintf("\$%x", $code<<16)."+$sptsin,(a5)\n".
-          moove("w",$sintin,"6(a5)");
+          "          move.l #".sprintf("\$%x", $code<<16)."+$sptsin,CONTRL+0(a6)\n".
+          moove("w",$sintin,"CONTRL+6(a6)");
     my $rest_idx = 0;
     for (my $idx = 0; $idx < $sptsin*2; $idx += 2)
     {
       #die "vdi: missing INT parameter in $ARGV line $.\n" unless defined $rest[$rest_idx] && defined $rest[$rest_idx+1];
       last if !defined $rest[$rest_idx];
-      print moove("w",$rest[$idx],"ptsin+".($idx*2)) .
-            moove("w",$rest[$idx+1],"ptsin+".(($idx+1)*2));
+      print moove("w",$rest[$idx],"PTSIN+".($idx*2)."(a6)") .
+            moove("w",$rest[$idx+1],"PTSIN+".(($idx+1)*2)."(a6)");
       $rest_idx += 2;
     }
     if ($sintin =~ /^\d+$/)
@@ -114,7 +114,7 @@ while (<>)
       {
         #die "vdi: missing ADDR parameter in $ARGV line $.\n" unless defined $rest[$rest_idx];
         last if !defined $rest[$rest_idx];
-        print moove("w",$rest[$idx],($idx*2)."(a6)");
+        print moove("w",$rest[$idx],"INTIN+".($idx*2)."(a6)");
         ++$rest_idx;
       }
     }

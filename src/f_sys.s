@@ -45,15 +45,15 @@ exit      maclab
 **********************************************************************
 aes       macro     code sintin sintout saddrin saddrout
           local     parnum,count
-          move.w    #[code],(a5)
-          moove     l,[sintin]<<16+[sintout],2(a5)
-          moove     l,[saddrin]<<16+[saddrout],6(a5)
+          move.w    #[code],CONTRL+0(a6)
+          moove     l,[sintin]<<16+[sintout],CONTRL+2(a6)
+          moove     l,[saddrin]<<16+[saddrout],CONTRL+6(a6)
 parnum    setnum    6
 count     setnum    0
 aes1      maclab
           ifnum     [sintin] = 0 goto aes2
           ifnum     [parnum] > [.nparms] goto aescal
-          moove     w,[.parm([parnum])],([parnum]-6)*2(a6)
+          moove     w,[.parm([parnum])],([parnum]-6)*INTIN+2(a6)
 parnum    setnum    [parnum]+1
 sintin    setnum    [sintin]-1
           goto      aes1
@@ -73,22 +73,22 @@ aescal    maclab
 **********************************************************************
 vdi       macro     code,sptsin,sintin
           local     parnum,count
-          move.l    #[code]<<16+[sptsin],(a5)
-          moove     w,[sintin],6(a5)
+          move.l    #[code]<<16+[sptsin],CONTRL+0(a6)
+          moove     w,[sintin],CONTRL+6(a6)
 parnum    setnum    4
 count     setnum    0
 vdi1      maclab
           ifnum     [sptsin] = 0 goto vdi2
           ifnum     [parnum] >= [.nparms] goto vdi3
-          moove     w,[.parm([parnum])],ptsin+([parnum]-4)*2
-          moove     w,[.parm([parnum]+1)],ptsin+([parnum]-3)*2
+          moove     w,[.parm([parnum])],PTSIN+([parnum]-4)*2(a6)
+          moove     w,[.parm([parnum]+1)],PTSIN+([parnum]-3)*2(a6)
 parnum    setnum    [parnum]+2
 sptsin    setnum    [sptsin]-1
           goto      vdi1
 vdi2      maclab
           ifnum     [sintin] = 0 goto vdi3
           ifnum     [parnum] > [.nparms] goto vdi3
-          moove     w,[.parm([parnum])],[count]*2(a6)
+          moove     w,[.parm([parnum])],INTIN+[count]*2(a6)
 count     setnum    [count]+1
 parnum    setnum    [parnum]+1
 sintin    setnum    [sintin]-1

@@ -30,8 +30,8 @@
  include "f_sys.s"
  include "f_def.s"
  ;
- XREF  aescall,vdicall,contrl,intin,intout,ptsin,ptsout,addrin
- XREF  addrout,msg_buff,bildbuff,rec_adr,maus_rec,mark_buf,drawflag
+ XREF  aescall,vdicall
+ XREF  msg_buff,bildbuff,rec_adr,maus_rec,mark_buf,drawflag
  XREF  show_m,hide_m,save_scr,win_rdw,rsrc_gad,set_xx,drei_chg
  XREF  save_buf,win_abs,choofig,copy_blk,win_xy,koos_mak,alertbox
  XREF  rand_tab,logbase,get_koos,over_que,fram_del,fuenf_4c,koostr1
@@ -42,6 +42,13 @@
  XDEF  work_blk,form_do,form_del,form_buf,form_wrt,mrk,frzeiche
  XDEF  chookoo,work_bl2,init_ted,koanztab,maus_neu,over_beg,over_old
  XDEF  maus_bne,cent_koo,over_cut,frrotier,frzerren,frzoomen,frprojek
+ ;
+**********************************************************************
+*   Global register mapping:
+*
+*   a4   Address of address of current window record
+*   a6   Base address of data section
+**********************************************************************
 
 *---------------------------------------------------------------------
 *               A T T R I B U T E S   M E N U
@@ -143,9 +150,9 @@ attrib30  cmp.b     #4,d4
           moveq.l   #4,d0               -- User-defined pattern --
           bsr       obj_off
           move.w    maus_rec+12,d0
-          sub.w     intout+2,d0
+          sub.w     INTOUT+2(a6),d0
           move.w    maus_rec+14,d1      D0/1: XY-offset of pattern pixel clicked by user
-          sub.w     intout+4,d1
+          sub.w     INTOUT+4(a6),d1
           lsr.w     #3,d0               bit pos.
           lsr.w     #3,d1
           move.w    d1,d2
@@ -159,9 +166,9 @@ attrib33  lea       choofil,a0          flip bit within the pattern
           bchg      d3,(a0,d2.w)
           bsr       hide_m
           move.l    maus_rec+12,d0
-          sub.l     intout+2,d0
+          sub.l     INTOUT+2(a6),d0
           and.l     #$780078,d0
-          add.l     intout+2,d0
+          add.l     INTOUT+2(a6),d0
           move.l    d0,d1
           add.l     #$70007,d1
           moveq.l   #10,d3
@@ -172,7 +179,7 @@ attrib33  lea       choofil,a0          flip bit within the pattern
           bra       attrib23
 attrib34  moveq.l   #4,d0               -- Clear pattern definition box --
           bsr       obj_off
-          move.l    intout+2,d0
+          move.l    INTOUT+2(a6),d0
           move.l    d0,d1
           add.l     #$7f007f,d1
           move.l    logbase,a0
@@ -193,7 +200,7 @@ attrib20  cmp.w     #20,2(a2)           -- Linie attribute dialog --
           moveq.l   #7,d0               line pattern definition
           bsr       obj_off
           move.w    maus_rec+12,d0
-          sub.w     intout+2,d0
+          sub.w     INTOUT+2(a6),d0
           lsr.w     #3,d0
           move.l    180(a3),a0
           eor.b     #%1101,(a0,d0.w)
@@ -443,7 +450,7 @@ fuenf_46  cmp.b     #$46,d0
           beq       men_exit
           moveq.l   #22,d1              + Disable +
           bsr       rsrc_gad
-          move.l    addrout,a3
+          move.l    ADDROUT+0(a6),a3
           clr.w     82(a3)
           move.w    #8,106(a3)
           move.w    #8,130(a3)
@@ -789,9 +796,9 @@ obj_off   ;
           aes       44 1 3 1 0 !d0 !a3  ;XY-Koo. des D0. Objektes
           rts
           ;
-obj_draw  move.l    d6,4(a6)            ** draw object **
-          move.l    d7,8(a6)
-          move.l    a3,addrin
+obj_draw  move.l    d6,INTIN+4(a6)            ** draw object **
+          move.l    d7,INTIN+8(a6)
+          move.l    a3,ADDRIN+0(a6)
           aes       42 6 1 1 0 !d0 !d1  ;obj_draw
           rts
           ;
@@ -865,15 +872,14 @@ work_bl2  lea       mfdb_q,a1           address of source+target MFDB struct arr
           sub.l     d0,d2
           move.l    d2,4(a1)            width & height of the source region
           move.l    d2,24(a1)           = width & height of the destination region
-          move.l    a1,14(a5)
+          move.l    a1,CONTRL+14(a6)
           add.w     #20,a1              pointer to target MFDB
-          move.l    a1,18(a5)
-          lea       ptsin,a1
-          move.l    d0,(a1)             fill PTSIN: upper-left XY and lower-right XY in src and dest bitmaps
-          move.l    d1,4(a1)
-          move.l    d0,8(a1)
-          move.l    d1,12(a1)
-          move.w    d3,(a6)             D3: combination mode
+          move.l    a1,CONTRL+18(a6)
+          move.l    d0,PTSIN+0(a6)      fill PTSIN: upper-left XY and lower-right XY in src and dest bitmaps
+          move.l    d1,PTSIN+4(a6)
+          move.l    d0,PTSIN+8(a6)
+          move.l    d1,PTSIN+12(a6)
+          move.w    d3,INTIN+0(a6)      D3: combination mode
           vdi       109 4 1             ;copy_raster
           rts
           ;
@@ -922,16 +928,16 @@ form_do   bsr       maus_alt            ** Open dialog window **
           aes       107 1 1 0 0 1       ;wind_update
           move.w    d2,d1
           bsr       rsrc_gad
-          move.l    addrout,a3          A3: address of object tree
+          move.l    ADDROUT+0(a6),a3    A3: address of object tree
           aes       54 0 5 1 0 !a3      ;form_center
-          move.l    intout+2,d6
-          move.l    intout+6,d7
+          move.l    INTOUT+2(a6),d6
+          move.l    INTOUT+6(a6),d7
           sub.l     #$30003,d6
           add.l     #$60006,d7
-          move.l    d6,2(a6)
-          move.l    d7,6(a6)
-          move.l    d6,10(a6)
-          move.l    d7,14(a6)
+          move.l    d6,INTIN+2(a6)
+          move.l    d7,INTIN+6(a6)
+          move.l    d6,INTIN+10(a6)
+          move.l    d7,INTIN+14(a6)
           aes       51 9 1 1 0 0        ;form_dial
           clr.w     d0
           moveq.l   #4,d1
@@ -952,7 +958,7 @@ form_do4  lea       form_buf,a0
           move.w    34(a2),6(a0)
 form_do2  ;
           aes       50 1 1 1 0 0 !a3    ;form_do
-          move.w    intout,d4           D4: index of exit button
+          move.w    INTOUT+0(a6),d4     D4: index of exit button
           move.w    d4,d0
           mulu.w    #24,d0              deselect exit button
           bclr      #0,11(a3,d0.l)
@@ -1100,15 +1106,15 @@ form_wr2  add.b     #'0',d0
           ;
 form_del  move.l    rec_adr,a4          ** Remove dialog window **
           aes       104 2 5 0 0 !(a4) 10  ;wind_get
-          move.w    intout+2,d0
+          move.w    INTOUT+2(a6),d0
           cmp.w     (a4),d0
           beq.s     form_de1            is in top-level window
           clr.l     d6
           move.l    #$2800190,d7
-form_de1  move.l    d6,2(a6)
-          move.l    d7,6(a6)
-          move.l    d6,10(a6)
-          move.l    d7,14(a6)
+form_de1  move.l    d6,INTIN+2(a6)
+          move.l    d7,INTIN+6(a6)
+          move.l    d6,INTIN+10(a6)
+          move.l    d7,INTIN+14(a6)
           aes       51 9 1 1 0 3        ;form_dial
           aes       107 1 1 0 0 0       ;wind_update
           move.w    choomou,d0
@@ -1119,10 +1125,10 @@ form_mud  bsr       hide_m              ** Fill pattern definition box **
           moveq.l   #4,d0
           bsr       obj_off
           move.l    logbase,a1
-          move.w    intout+4,d0
+          move.w    INTOUT+4(a6),d0
           mulu.w    #80,d0
           add.l     d0,a1
-          move.w    intout+2,d0
+          move.w    INTOUT+2(a6),d0
           lsr.w     #3,d0
           add.w     d0,a1
           lea       choofil,a0
@@ -1150,18 +1156,17 @@ form_mus  bsr       hide_m              ** Fill pattern demo box **
           bne.s     form_mu2
           moveq.l   #15,d0
           lea       choofil,a0
-          lea       intin,a1
+          lea       INTIN(a6),a1
 form_mu1  move.w    (a0)+,(a1)+
           dbra      d0,form_mu1
           vdi       112 0 16
 form_mu2  moveq.l   #5,d0
           bsr       obj_off
-          lea       ptsin,a0
-          move.l    intout+2,d0
-          move.l    d0,(a0)
+          move.l    INTOUT+2(a6),d0
+          move.l    d0,PTSIN+0(a6)
           add.l     140(a3),d0
           sub.l     #$10001,d0
-          move.l    d0,4(a0)
+          move.l    d0,PTSIN+4(a6)
           vdi       114 2 0             ;fill_rectangle
           vdi       23 0 1 1
           vdi       25 0 1 1
@@ -1179,17 +1184,16 @@ form_lin  bsr       hide_m              ** Draw line pattern demo **
           vdi       32 0 1 1
           moveq.l   #4,d0
           bsr       obj_off
-          lea       ptsin,a0
-          move.l    intout+2,d0
+          move.l    INTOUT+2(a6),d0
           move.w    118(a3),d1
           lsr.w     #1,d1
           add.w     d1,d0
-          move.l    d0,(a0)
+          move.l    d0,PTSIN+0(a6)
           swap      d0
           add.w     116(a3),d0
           subq.w    #1,d0
           swap      d0
-          move.l    d0,4(a0)
+          move.l    d0,PTSIN+4(a6)
           vdi       6 2 0               ;polyline
           vdi       16 1 0 1 0
           vdi       15 0 1 1
@@ -1225,7 +1229,7 @@ init_ted  tst.w     2(a2)               ** set TEDINFO addresses **
 init_te1  moveq.l   #8,d0
           move.w    (a2),d1
           bsr       rsrc_gad+2
-          move.l    addrout,a0
+          move.l    ADDROUT+0(a6),a0
           move.l    (a0),a0
           add.w     TED_ADR+2(a2),a0
           move.l    a0,TED_ADR(a2)

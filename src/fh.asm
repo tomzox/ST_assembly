@@ -32,16 +32,16 @@
  ;
  XREF  frradier,frmodus,frpinsel,frmuster,new_1koo,new_2koo,vdicall
  XREF  maus_rec,hide_m,show_m,noch_qu,return,set_wrmo,win_xy,logbase
- XREF  bildbuff,ptsin,frsprayd,frlinie,frpunkt,noch_qu,clip_on
+ XREF  bildbuff,frsprayd,frlinie,frpunkt,noch_qu,clip_on
  XREF  set_attr,set_att2,ret_attr,ret_att2,maus_rec,chooset,sinus
  ;
  XDEF  punkt,pinsel,spdose,radier,gummi,kurve
-
           ;
 **********************************************************************
-*   A6   Address of INTIN
-*   A5   Address of CONTRL
-*   A4   Address of PTSIN
+*   Global register mapping:
+*
+*  [a4   Address of address of current window record] - unused
+*   a6   Base address of data section
 **********************************************************************
           ;
 punkt     clr.w     d1                  *** Shape: Pencil ***
@@ -83,7 +83,7 @@ punkt2    addq.b    #1,d1               ------ Polymarker ------
           bsr       clip_on
 punkt3    bsr       hide_m
           bsr       new_1koo
-          move.l    d3,(a4)
+          move.l    d3,PTSIN+0(a6)
           vdi       7 1 0               ;polymarker
           bsr       show_m
           bsr       noch_qu
@@ -114,18 +114,18 @@ pinsel1   move.l    d3,d4               -- Loop --
           bsr       hide_m
           move.b    maus_rec+1,d0
           beq       ret_att2            -> done
-          move.l    d3,(a4)
-          move.l    d4,4(a4)
-          move.l    d4,8(a4)
-          move.l    d3,12(a4)
-          sub.w     d6,(a4)
-          sub.w     d6,4(a4)
-          add.w     d6,8(a4)
-          add.w     d6,12(a4)
-          sub.w     d7,2(a4)
-          sub.w     d7,6(a4)
-          add.w     d7,10(a4)
-          add.w     d7,14(a4)
+          move.l    d3,PTSIN+0(a6)
+          move.l    d4,PTSIN+4(a6)
+          move.l    d4,PTSIN+8(a6)
+          move.l    d3,PTSIN+12(a6)
+          sub.w     d6,PTSIN+0(a6)
+          sub.w     d6,PTSIN+4(a6)
+          add.w     d6,PTSIN+8(a6)
+          add.w     d6,PTSIN+12(a6)
+          sub.w     d7,PTSIN+2(a6)
+          sub.w     d7,PTSIN+6(a6)
+          add.w     d7,PTSIN+10(a6)
+          add.w     d7,PTSIN+14(a6)
           vdi       9 4 0               ;filled area
           bsr       show_m
           bra       pinsel1
@@ -143,13 +143,13 @@ pinsel8   move.l    d3,d4
           move.b    maus_rec+1,d0
           beq.s     pinsel9
           bsr       hide_m
-          move.l    d3,(a4)
-          move.l    d4,4(a4)
+          move.l    d3,PTSIN+0(a6)
+          move.l    d4,PTSIN+4(a6)
           vdi       6 2 0
           bsr       show_m
           bra       pinsel8
-pinsel9   move.l    (a4),d0
-          move.l    4(a4),d1
+pinsel9   move.l    PTSIN+0(a6),d0
+          move.l    PTSIN+4(a6),d1
           bsr       new_2koo
           vdi       16 1 0 1 0
           vdi       17 0 1 1
@@ -248,7 +248,6 @@ spdose7   bset.b    d4,(a0)
 spdose6   move.l    maus_rec+12,d3
           move.b    maus_rec+1,d0
           bne       spdose1
-          lea       ptsin,a4
           rts
           ;
 gummi     bsr       set_att2            *** Shape: Rubberband ***
@@ -263,8 +262,8 @@ gummi1    bsr       show_m
           bsr       hide_m
           move.b    maus_rec+1,d0
           beq       ret_attr
-          move.l    d7,(a4)
-          move.l    d3,4(a4)
+          move.l    d7,PTSIN+0(a6)
+          move.l    d3,PTSIN+4(a6)
           vdi       6 2 0               ;polyline
           bra       gummi1
           ;
@@ -297,12 +296,12 @@ radier2   swap      d7
           bcs.s     radier1
           subq.w    #1,d7
 radier1   bsr       hide_m              ++ loop ++
-          move.l    d3,(a4)
-          move.l    d3,4(a4)
-          sub.w     d5,(a4)
-          sub.w     d6,2(a4)
-          add.l     d7,4(a4)
-          move.w    #1,10(a5)
+          move.l    d3,PTSIN+0(a6)
+          move.l    d3,PTSIN+4(a6)
+          sub.w     d5,PTSIN+0(a6)
+          sub.w     d6,PTSIN+2(a6)
+          add.l     d7,PTSIN+4(a6)
+          move.w    #1,CONTRL+10(a6)
           vdi       11 2 0              ;bar
           bsr       show_m
           bsr       noch_qu

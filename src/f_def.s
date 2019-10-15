@@ -26,6 +26,22 @@
  ifnd __F_DEF_S
 __F_DEF_S equ 1
 
+          ;        *** Offsets to data section (A6) ***
+          ;        *** Interface to AES/VDI (aescall, vdicall) ***
+GRHANDLE  equ    0   ; ds.w
+APPL_ID   equ    2   ; ds.w
+AESPB     equ    4   ; contrl,global,intin,intout,addrin,addrout
+VDIPB     equ    28  ; contrl,intin,ptsin,intout,ptsout
+CONTRL    equ    48  ; ds.w 11
+GLOBAL    equ    70  ; ds.w 20
+INTIN     equ   110  ; ds.w 20
+PTSIN     equ   150  ; ds.w 10
+INTOUT    equ   170  ; ds.w 50
+PTSOUT    equ   270  ; ds.w 20
+ADDRIN    equ   310  ; ds.l 3
+ADDROUT   equ   322  ; ds.l 3
+DSECT_SZ  equ   334
+          ;
           ;        *** Offsets within window struct ("wi1") ***
 WIN_HNDL  equ  0    ; window handle or -1 if window not open
 BILD_ADR  equ  2    ; Address of image buffer

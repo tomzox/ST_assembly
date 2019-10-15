@@ -35,18 +35,18 @@
  XREF  menu_adr,rec_adr,drawflag,mrk,logbase,bildbuff
  XREF  maus_rec,copy_blk,save_scr,fram_del,form_do,form_del
  XREF  hide_m,show_m,work_blk,work_bl2,alertbox,pinsel,spdose,gummi
- XREF  punkt,kurve,radier,over_old,over_que,over_beg,mfdb_q
+ XREF  punkt,kurve,radier,over_old,over_que,over_beg,mfdb_q,stack
  ;
- XDEF  evt_butt,stack,appl_id,aescall,vdicall,grhandle,aespb,vdipb
- XDEF  contrl,intin,intout,ptsin,ptsout,addrin,addrout,mark_buf
+ XDEF  evt_butt,mark_buf
  XDEF  win_xy,fram_drw,save_buf,win_abs,noch_qu,return,set_wrmo
  XDEF  koos_mak,clip_on,new_1koo,new_2koo,set_att2,ret_att2
  XDEF  ret_attr,set_attr,fram_ins,last_koo
 
 **********************************************************************
-*  A6  Address of INTIN
-*  A5  Address of CONTRL
-*  A4  Address of PTSIN
+*   Global register mapping:
+*
+*   a4   Address of address of current window record
+*   a6   Base address of data section
 **********************************************************************
           ;
 evt_butt  lea       win_xy,a0           WIN_XY: window coords.
@@ -82,7 +82,6 @@ evt_but4  bsr       save_scr
           move.w    #$ff00,(a0)
           lea       last_koo,a0
           clr.w     8(a0)
-          lea       ptsin,a4            A4: address of PTSIN
           move.l    maus_rec+16,d3      D3: mouse X/Y-pos.
 *- - - - - - - - - - - - - - - - - - - - - - - - - - -GRAPHICS-HANDLER
           move.w    choofig,d0
@@ -126,6 +125,7 @@ exit1     move.b    drawflag,d0
           move.l    BILD_ADR(a0),a1
           move.l    logbase,a0
           bsr       copy_blk
+          ;
 exit3     move.l    menu_adr,a0
           bclr.b    #3,491(a0)          enable "undo"
           move.w    mark_buf,d0
@@ -199,15 +199,15 @@ linie1    tst.w     d4                  mouse moved?
 linie4    bsr       set_att2            --- finalize line ---
           move.l    frlinie+46,d0
           and.l     #$30003,d0
-          move.l    d0,(a6)
+          move.l    d0,INTIN+0(a6)
           vdi       108 0 2             ;...end_styles
           move.l    38(a3),d0
           move.l    d3,d1
           bsr       new_2koo
-          move.l    d0,(a4)
-          move.l    d3,4(a4)
+          move.l    d0,PTSIN+0(a6)
+          move.l    d3,PTSIN+4(a6)
           vdi       6 2 0               ;polyline
-          bra       ret_att2
+          bra       ret_attr
           ;
 vieleck   clr.w     maus_rec            *** Shape: Polygon ***
           move.l    bildbuff,a2
@@ -220,7 +220,7 @@ vieleck   clr.w     maus_rec            *** Shape: Polygon ***
           dc.w      $a003
           bsr       show_m
 vieleck7  moveq.l   #-1,d3              wait for first mouse movement
-          bsr       vieleck3            RETURN key?
+          bsr       vieleck3            handle RETURN and backspace keys
           move.l    maus_rec+12,d0
           lea       win_xy,a0
           bsr       corr_adr
@@ -240,9 +240,9 @@ vieleck7  moveq.l   #-1,d3              wait for first mouse movement
 vieleck2  move.l    d3,d4               +++ Loop +++
           bsr       viele_dr            draw new line
           bsr       show_m
-vieleck4  bsr.s     vieleck3            RETURN key?
+vieleck4  bsr.s     vieleck3            handle RETURN and backspace keys
           moveq.l   #-1,d3
-          move.w    maus_rec,d0         mouse botton?
+          move.w    maus_rec,d0         mouse button?
           bne.s     vieleck5
           move.l    maus_rec+12,d0      mouse moved?
           lea       win_xy,a0
@@ -272,21 +272,21 @@ vieleck6  move.b    maus_rec+1,d0
           bsr       alertbox
           bra.s     vielec10
           ;
-vieleck3  move.w    #$b,-(sp)           ;bconstat
+vieleck3  move.w    #$b,-(sp)           ;bconstat: check for keypress
           trap      #1
           addq.l    #2,sp
           tst.w     d0
           bpl       tool_rts
-          move.w    #1,-(sp)            ;conin
+          move.w    #1,-(sp)            ;conin: read pressed key
           trap      #1
           addq.l    #2,sp
-          cmp.w     #13,d0              Return ?
+          cmp.w     #13,d0              Return key?
           beq.s     vielec12
           move.l    d7,d0               +++ Backspace key pressed +++
           sub.l     bildbuff,d0
           cmp.l     #4,d0
           bls       tool_rts
-          addq.l    #4,sp
+          addq.l    #4,sp               pop return address from stack
           bsr       hide_m
           bsr       viele_dr
           subq.l    #4,d7
@@ -299,10 +299,10 @@ vieleck3  move.w    #$b,-(sp)           ;bconstat
           bra       vieleck2
 vielec12  lea       stralvie,a0         +++ Return key pressed +++
           moveq.l   #1,d0
-          bsr       alertbox
-          cmp.w     #2,d0
-          beq       exit7               wait for mouse button to be released
-          addq.l    #4,sp
+          bsr       alertbox            ask if really done
+          cmp.w     #2,d0               "continue" selected?
+          beq       exit7               yes -> wait for mouse button release, then rts
+          addq.l    #4,sp               pop return address of this sub from stack
 vielec10  bsr       hide_m
           move.l    bildbuff,a0         delete polygon
           move.w    #2,36(a3)
@@ -338,20 +338,20 @@ vieleck8  move.l    (a0)+,38(a3)
           btst      #16,d0
           bne.s     vielec11            round corners
           bset      #17,d0
-vielec11  move.l    d0,(a6)
+vielec11  move.l    d0,INTIN+0(a6)
           vdi       108 0 2             ;line end mode
           moveq.l   #6,d0
-vieleck1  move.w    d0,(a5)             Polyline/Fill area
-          lea       vdipb+8,a2
-          move.l    bildbuff,(a2)
+vieleck1  move.w    d0,CONTRL+0(a6)     Polyline/Fill area
+          move.l    bildbuff,VDIPB+8(a6)  temporarily replace PTSIN with larger buffer
           move.l    d7,d0
           sub.l     bildbuff,d0
           lsr.w     #2,d0
           addq.w    #1,d0
-          move.w    d0,2(a5)
-          clr.w     6(a5)
+          move.w    d0,CONTRL+2(a6)
+          clr.w     CONTRL+6(a6)
           bsr       vdicall
-          move.l    a4,(a2)
+          lea       PTSIN(a6),a2
+          move.l    a2,VDIPB+8(a6)      restore PTSIN
           bra       ret_attr
           ;
 viele_dr  move.l    d7,a0               +++ Draw lines on screen +++
@@ -372,8 +372,8 @@ fuellen   bsr       new_1koo            *** Shape: Fill ***
           vdi       25 0 1 !frmuster+34 ;fill_color
           bsr       hide_m
           bsr       clip_on
-          move.l    d3,(a4)
-          move.w    frmuster+34,(a6)
+          move.l    d3,PTSIN+0(a6)
+          move.w    frmuster+34,INTIN+0(a6)
           vdi       103 1 1             ;contour_fill
           vdi       23 0 1 1
           bra       return
@@ -436,18 +436,18 @@ quadrat2  cmp.w     #$43,choofig        --- finalize square ---
           bsr       set_attr            set attributes
           move.w    chooset+2,d0
           bne       quadrat7            -> rounded corners
-          move.w    chooset,10(a5)
+          move.w    chooset,CONTRL+10(a6)
           bne.s     quadrat6            -> fill
           vdi       108 0 2 0 2
           vdi       6 5 0 !d6 !d7 !d4 !d7 !d4 !d5 !d6 !d5 !d6 !d7
           vdi       108 0 2 0 0
           bra.s     quadrat9
-quadrat6  move.w    #1,10(a5)           ;bar
+quadrat6  move.w    #1,CONTRL+10(a6)           ;bar
           bra.s     quadrat8
-quadrat7  move.w    #8,10(a5)           ;rounded_rec
+quadrat7  move.w    #8,CONTRL+10(a6)           ;rounded_rec
           move.w    chooset,d0
           beq.s     quadrat8
-          move.w    #9,10(a5)           ;filled_rounded_rec
+          move.w    #9,CONTRL+10(a6)           ;filled_rounded_rec
 quadrat8  ;
           vdi       11 2 0 !d6 !d7 !d4 !d5
 quadrat9  lea       last_koo,a0         store coords.
@@ -584,7 +584,7 @@ kreis3    tst.w     d6                  ---- finalize circle ----
           bsr       set_attr
           move.l    frlinie+46,d0
           and.l     #$30003,d0
-          move.l    d0,(a6)
+          move.l    d0,INTIN+0(a6)
           vdi       108 0 2             ;end_styles
           move.w    chooseg,d1
           move.w    chooseg+2,d2
@@ -599,17 +599,17 @@ kreis3    tst.w     d6                  ---- finalize circle ----
           beq.s     kreis8              -> circle
 kreis6    cmp.w     #$2b,d3
           beq       kreis12             -> arc of ellipsis
-          move.w    d0,10(a5)
+          move.w    d0,CONTRL+10(a6)
           vdi       11 4 2 !d4 !d5 0 0 0 0 !d6 0 !d1 !d2  ;arc/pie
           bra.s     kreis7
 kreis8    cmp.w     #$2b,d3
           beq.s     kreis11             -> ellipsis
-          move.w    #4,10(a5)
+          move.w    #4,CONTRL+10(a6)
           vdi       11 3 0 !d4 !d5 0 0 !d6 0  ;filled_circle
           bra.s     kreis7
 kreis11   moveq.l   #1,d0
 kreis12   add.w     #4,d0
-          move.w    d0,10(a5)
+          move.w    d0,CONTRL+10(a6)
           vdi       11 2 2 !d4 !d5 !d6 !d7 !d1 !d2  ;ellipse/arc/pie
 kreis7    lea       last_koo,a0
           move.w    d4,(a0)             store coords.
@@ -621,13 +621,13 @@ kreis7    lea       last_koo,a0
           move.w    #-1,8(a0)
           bra       ret_attr
           ;
-kreis_k   move.l    chooseg,(a6)
+kreis_k   move.l    chooseg,INTIN+0(a6)
           cmp.b     #$2b,choofig+1
           beq.s     kreis_e
-          move.w    #2,10(a5)
+          move.w    #2,CONTRL+10(a6)
           vdi       11 4 2 !d4 !d5 0 0 0 0 !d6 0  ;arc
           rts
-kreis_e   move.w    #6,10(a5)
+kreis_e   move.w    #6,CONTRL+10(a6)
           vdi       11 4 2 !d4 !d5 !d6 !d7  ;elliptical_arc
           rts
           ;
@@ -705,8 +705,7 @@ text17    move.l    win_xy,d0           temporary copy of image
           ;
 text2     move.w    d0,d2
           lea       stack,a0
-          lea       vdipb+4,a1
-          move.l    a0,(a1)
+          move.l    a0,VDIPB+4(a6)      (!) temporarily use larger buffer for INTIN
           cmp.l     a0,a3               at least one char in the text buffer?
           beq       text7
           movem.l   d2/a2-a3,-(sp)      +++ restore image +++
@@ -719,14 +718,14 @@ text2     move.w    d0,d2
           move.w    data_buf+4,d3       vertical text?
           btst      #0,d3
           bne.s     text20
-          sub.l     ptsout+12,d0        0+180 degrees
-          add.l     ptsout+4,d1
+          sub.l     PTSOUT+12(a6),d0    0+180 degrees
+          add.l     PTSOUT+4(a6),d1
           bra.s     text21
 text20    cmp.b     #1,d3               90 degrees
           bne.s     text22
-          sub.l     ptsout+4,d0
+          sub.l     PTSOUT+4(a6),d0
           bra.s     text21
-text22    move.l    ptsout+12,d2        270 degrees
+text22    move.l    PTSOUT+12(a6),d2    270 degrees
           swap      d2
           add.l     d2,d1
 text21    sub.l     #$30003,d0
@@ -754,8 +753,8 @@ text7     cmp.b     #8,d2               not backspace
           beq       text9
 text8     move.w    d2,d3               Help or Undo keys?
           bpl       text15
-          lea       vdipb+4,a0          +++ Formulare +++
-          move.l    a6,(a0)
+          lea       INTIN(a6),a1        +++ Formulare +++
+          move.l    a1,VDIPB+4(a6)      restore INTIN
           bsr       show_m
           bsr       text_rat
           movem.l   a2-a4/d2,-(sp)
@@ -784,9 +783,8 @@ text16    bsr       form_do
 text6     move.b    maus_rec+1,d0
           bne       text6
           clr.w     maus_rec
-          lea       vdipb+4,a0
           lea       stack,a1
-          move.l    a1,(a0)
+          move.l    a1,VDIPB+4(a6)      (!) temporarily use larger buffer for INTIN
           cmp.w     #-1,d2              UNDO-key?
           beq.s     text15+2
           move.w    frzeiche+6,d2
@@ -797,10 +795,10 @@ text15    move.w    d2,(a3)+            +++ draw new string +++
           move.l    a3,d0
           sub.l     a0,d0
           lsr.w     #1,d0
-          move.l    (a2),(a4)
+          move.l    (a2),PTSIN+0(a6)
           vdi       8 1 !d0             ;text
-text9     lea       vdipb+4,a0
-          move.l    a6,(a0)
+text9     lea       INTIN(a6),a1
+          move.l    a1,VDIPB+4(a6)      restore INTIN
           bra       text1
           ;
 text4     move.l    bildbuff,a0         +++ End +++
@@ -831,7 +829,7 @@ text_att  move.w    frtext+20,d0        +++ Configure attributes +++
           vdi       22 0 1 !frtext+34   ;color
           vdi       106 0 1 !chootxt    ;effects
           vdi       12 1 0 0 !frtext+6  ;size
-          move.w    ptsout+6,d0
+          move.w    PTSOUT+6(a6),d0
           btst.b    #4,chootxt+1        border?
           beq.s     text_at1
           addq.w    #2,d0
@@ -1036,9 +1034,9 @@ set_wrmo  clr.w     d0                  ** set current mode **
           vdi       32 0 1 !d0          ;set_writing_modus
           rts
           ;
-clip_on   move.l    win_xy,(a4)         ** set clipping rect. **
-          move.l    win_xy+4,4(a4)
-          move.w    #1,(a6)
+clip_on   move.l    win_xy,PTSIN+0(a6)  ** set clipping rect. **
+          move.l    win_xy+4,PTSIN+4(a6)
+          move.w    #1,INTIN+0(a6)
           vdi       129 2 1
           rts
 ret_attr  ;                             ** set GEM-attributes **
@@ -1187,15 +1185,15 @@ fram_in1  clr.w     d3                  use combination mode
           lea       mfdb_q,a0
           move.l    stack+20,(a0)
           move.l    a1,20(a0)
-          move.w    d3,(a6)             mode
+          move.w    d3,INTIN+0(a6)      mode
           move.l    d1,d3
           sub.l     d0,d3
           move.l    d3,4(a0)
           move.l    d3,24(a0)
-          move.l    a0,14(a5)
+          move.l    a0,CONTRL+14(a6)
           add.w     #20,a0
-          move.l    a0,18(a5)
-          lea       ptsin,a0
+          move.l    a0,CONTRL+18(a6)
+          lea       PTSIN(a6),a0
           move.l    d0,(a0)+
           move.l    d1,(a0)+
           move.l    d2,(a0)+
@@ -1402,17 +1400,6 @@ alrast1   swap      d0                  Y-coord.
 alrast2   movem.l   (sp)+,d2-d4
 tool_rts  rts
           ;
-aescall   move.l    #aespb,d1
-          move.l    #$c8,d0
-          trap      #2
-          rts
-          ;
-vdicall   move.w    grhandle,12(a5)
-          move.l    #vdipb,d1
-          moveq.l   #$73,d0
-          trap      #2
-          rts
-          ;
 *-----------------------------------------------------------------DATA
 win_xy    ds.w   7
 mark_buf  ds.w   5
@@ -1421,23 +1408,11 @@ koostr    dc.b   27,'Y h###/###',0
 koostr1   dc.b   27,'Y h       ',0
 koostr2   dc.b   27,'Y h---/---',0
 koo_buff  ds.w   4
-last_koo  dcb.l  2,0
+last_koo  ds.w   5   ; x0,y0; x1,y1; flag 0/-1
 ;mfdb_q    dc.w   0000,0000,00,00,40,0,1,0,0,0
 ;          dc.w   0000,0000,00,00,40,0,1,0,0,0
 stralvie  dc.b   '[3][Polygon completed?][Ok|Continue]',0
 stralmax  dc.b   '[3][Maximum is 128 corners!][Abort]',0
 *---------------------------------------------------------------------
-grhandle  ds.w   1
-appl_id   ds.w   1
-aespb     dc.l   contrl,global,intin,intout,addrin,addrout
-vdipb     dc.l   contrl,intin,ptsin,intout,ptsout
-contrl    ds.w   11
-global    ds.w   20
-intin     ds.w   20
-ptsin     ds.w   10
-intout    ds.w   50
-ptsout    ds.w   20
-addrin    ds.l   3
-addrout   ds.l   3
-stack     ds.w   1000 /* FIXME multi-purpose buffer of undefined size */
+          align 2
           END

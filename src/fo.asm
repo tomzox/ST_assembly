@@ -30,14 +30,21 @@
  include "f_sys.s"
  include "f_def.s"
  ;
- XREF  aescall,vdicall,contrl,intin,intout,ptsin,ptsout,addrin,addrout
+ XREF  aescall,vdicall
  XREF  logbase,bildbuff,rec_adr,maus_rec,mark_buf,drawflag,rand_tab
  XREF  show_m,hide_m,save_buf,save_scr,win_rdw,copy_blk,alertbox
  XREF  cent_koo,form_buf,menu_adr,men_inv,mrk,over_cut,over_old
  XREF  win_xy,work_blk,form_do,frrotier,frzoomen,frzerren
- XREF  work_bl2,form_del,stack
+ XREF  work_bl2,form_del
  ;
- XDEF  fuenf_4c,sinus
+ XDEF  fuenf_4c,sinus,stack
+ ;
+**********************************************************************
+*   Global register mapping:
+*
+*   a4   Multi-purpose (initially: Address of address of current window record)
+*   a6   Base address of data section
+**********************************************************************
 
 *-------------------------------------------------MENU-HANDLER(cntd.)
 fuenf_4c  cmp.b     #$4c,d0
@@ -707,5 +714,7 @@ sinus     dc.w  0,572,1144,1715,2268,2856,3425,3993,4560,5126,5690
           dc.w  29935,30163,30382,30592,30792,30983,31164,31336,31499
           dc.w  31651,31795,31928,32052,32166,32270,32365,32449,32524
           dc.w  32588,32643,32688,32723,32748,32763,32768
+*---------------------------------------------------------------------
+stack     ds.w   1000 /* FIXME multi-purpose buffer of undefined size */
 *---------------------------------------------------------------------
           END

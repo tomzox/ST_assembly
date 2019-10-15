@@ -30,20 +30,19 @@
  include "f_sys.s"
  include "f_def.s"
  ;
- XREF  aescall,vdicall,grhandle,appl_id,contrl,intin,intout,ptsin
- XREF  addrin,addrout,now_offs,evt_butt,evt_menu,fram_drw,save_buf
+ XREF  now_offs,evt_butt,evt_menu,fram_drw,save_buf
  XREF  menu_adr,directory,alertbox,mark_buf,mrk,koos_mak,wind_chg
  ;
+ XDEF  aescall,vdicall
  XDEF  bildbuff,wi1,rec_adr,maus_rec,win_rdw,show_m,hide_m
  XDEF  save_scr,set_xx,rsrc_gad,vslidrw,wi_count,drawflag,logbase
  XDEF  fram_del,copy_blk,rand_tab,msg_buff
 
 **********************************************************************
-*  Global register mapping:
+*   Global register mapping:
 *
-*   A4   Address of address of current window record
-*   A5   Address of CONTRL
-*   A6   Address of INTIN
+*   a4   Address of address of current window record
+*   a6   Base address of data section
 **********************************************************************
           ;
           move.l    a7,a5               --- Initialize application ---
@@ -70,23 +69,42 @@
           and.l     #$ffff00,d0         to start of page
           move.l    d0,(a0)
           subq.l    #8,a7
-          lea       intin,a6
-          lea       contrl,a5
+          lea       dsect_a6,a6         initialize data section pointer a6
+          lea       CONTRL(a6),a0       initialize AESPB and VDIPB pointer arrays
+          move.l    a0,AESPB+0*4(a6)    AESPB := {CONTRL,GLOBAL,INTIN,INTOUT,ADDRIN,ADDROUT}
+          move.l    a0,VDIPB+0*4(a6)    VDIPB := {CONTRL,INTIN,PTSIN,INTOUT,PTSOUT}
+          lea       GLOBAL(a6),a0
+          move.l    a0,AESPB+1*4(a6)
+          lea       INTIN(a6),a0
+          move.l    a0,AESPB+2*4(a6)
+          move.l    a0,VDIPB+1*4(a6)
+          lea       PTSIN(a6),a0
+          move.l    a0,VDIPB+2*4(a6)
+          lea       INTOUT(a6),a0
+          move.l    a0,AESPB+3*4(a6)
+          move.l    a0,VDIPB+3*4(a6)
+          lea       ADDRIN(a6),a0
+          move.l    a0,AESPB+4*4(a6)
+          lea       ADDROUT(a6),a0
+          move.l    a0,AESPB+5*4(a6)
+          lea       PTSOUT(a6),a0
+          move.l    a0,VDIPB+4*4(a6)
+
           aes       10 0 1 0 0          ;APPL_INIT
-          move.w    intout,appl_id
+          move.w    INTOUT(a6),APPL_ID(a6)
           bmi       mainrts
           aes       77 0 5 0 0          ;GRAF_HANDLE
-          move.w    intout,grhandle
+          move.w    INTOUT(a6),GRHANDLE(a6)
           vdi       100 0 11 1 1 1 1 1 1 1 1 1 1 2
           ;
 *---------------------------------------------------------SETUP-------
           ;
           aes       110 0 1 1 0 rscname ;rsrc_load
-          move.w    intout,d0
+          move.w    INTOUT(a6),d0
           beq       mainrts             Error -> abort
           clr.w     d1
           bsr       rsrc_gad
-          move.l    addrout,menu_adr
+          move.l    ADDROUT(a6),menu_adr
           lea       directory,a2        -- initialitze Itemslct --
           move.w    #$19,-(sp)
           trap      #1                  ;current_disk
@@ -112,33 +130,33 @@ getdir2   move.b    (a0)+,(a2)+
           bsr       hide_m              ;hide_mouse
           moveq.l   #16,d1
           bsr       rsrc_gad
-          move.l    addrout,a3
+          move.l    ADDROUT(a6),a3
           aes       104 2 5 0 0 0 4     ;wind_get
-          move.l    intout+2,16(a3)
-          move.l    intout+6,20(a3)
-          move.l    a3,4(a6)
-          clr.l     8(a6)
+          move.l    INTOUT+2(a6),16(a3)
+          move.l    INTOUT+6(a6),20(a3)
+          move.l    a3,INTIN+4(a6)
+          clr.l     INTIN+8(a6)
           aes       105 6 1 0 0 0 14    ;wind_set
-          move.l    intout+2,2(a6)
-          move.l    intout+6,6(a6)
-          move.l    intout+2,10(a6)
-          move.l    intout+6,14(a6)
-          aes       51 9 1 1 0 3        ;form_dial
-          aes       30 1 1 1 0 1 !menu_adr  ;menu_bar
-          move.l    #maus_kno,14(a5)    replace handler for mouse button click
-          vdi       125 0 0             ;vex_butv
-          move.l    18(a5),maus_rec+4
-          move.l    #maus_mov,14(a5)    replace handler for mouse movement
-          vdi       127 0 0             ;vex_curv
-          move.l    18(a5),maus_rec+8
-          aes       78 1 1 0 0 0        ;GRAF_MOUSE (arrow shape)
-          bsr       show_m              ;show_mouse
-          lea       wi1,a4              Address of first window
+          move.l    INTOUT+2(a6),INTIN+2(a6)
+          move.l    INTOUT+6(a6),INTIN+6(a6)
+          move.l    INTOUT+2(a6),INTIN+10(a6)
+          move.l    INTOUT+6(a6),INTIN+14(a6)
+          aes       51 9 1 1 0 3              ;form_dial
+          aes       30 1 1 1 0 1 !menu_adr    ;menu_bar
+          move.l    #maus_kno,CONTRL+14(a6)   ;replace handler for mouse button click
+          vdi       125 0 0                   ;vex_butv
+          move.l    CONTRL+18(a6),maus_rec+4
+          move.l    #maus_mov,CONTRL+14(a6)   ;replace handler for mouse movement
+          vdi       127 0 0                   ;vex_curv
+          move.l    CONTRL+18(a6),maus_rec+8
+          aes       78 1 1 0 0 0              ;GRAF_MOUSE (arrow shape)
+          bsr       show_m                    ;show_mouse
+          lea       wi1,a4                    Address of first window
           move.l    a4,rec_adr
 *--------------------------------------------------------EVENT-HANDLER
 evt_multi ;
           aes       25 16 7 1 0 %110000 0 0 0 0 0 0 0 0 0 0 0 0 0 70 0 msg_buff       ;evt_multi
-          btst.b    #4,intout+1
+          btst.b    #4,INTOUT+1(a6)
           bne.s     evt_mul1
           bsr       koos_mak            print mouse coords. in menu bar, if enabled
           lea       maus_rec,a2
@@ -150,7 +168,7 @@ evt_multi ;
           bne.s     evt_mul2
           move.l    rec_adr,a4
           aes       104 2 5 0 0 !(a4) 10  ;wind_get
-          move.w    intout+2,d0
+          move.w    INTOUT+2(a6),d0
           cmp.w     WIN_HNDL(a4),d0
           beq.s     evt_mul3            is accessory window active?
           move.w    #-1,2(a2)
@@ -200,8 +218,8 @@ redraw1   add.w     #WIN_STRUCT_SZ,a3
 redraw2   moveq.l   #11,d3
 getreck   ;
           aes       104 2 5 0 0 !(a3) !d3  ;wind_get
-          move.l    intout+2,d0
-          move.l    intout+6,d1
+          move.l    INTOUT+2(a6),d0
+          move.l    INTOUT+6(a6),d1
           tst.l     d1
           beq       rw_end              end of list?
           add.l     d0,d1
@@ -455,20 +473,20 @@ arrowed7  cmp.b     #5,d0
           ;
 sized     cmp.w     #27,d0
           bne.s     moved
-          move.l    msg_buff+8,4(a6)    --- Change of window size ---
-          move.l    msg_buff+12,8(a6)
+          move.l    msg_buff+8,INTIN+4(a6)    --- Change of window size ---
+          move.l    msg_buff+12,INTIN+8(a6)
           aes       105 6 1 0 0 !(a4) 5   ;wind_set
           aes       108 6 5 0 0 1 $fef  ;wind_calc
-          move.l    intout+6,d3
+          move.l    INTOUT+6(a6),d3
           bra       sizedsub
           ;
 moved     cmp.w     #28,d0
           bne.s     fulled
-          move.l    msg_buff+8,4(a6)    --- Moving window ---
-          move.l    msg_buff+12,8(a6)
+          move.l    msg_buff+8,INTIN+4(a6)    --- Moving window ---
+          move.l    msg_buff+12,INTIN+8(a6)
           aes       105 6 1 0 0 !(a4) 5  ;wind_set
           aes       108 6 5 0 0 1 $fef   ;wind_calc
-          move.l    intout+2,d3
+          move.l    INTOUT+2(a6),d3
           bra       movedsub
           ;
 fulled    cmp.w     #23,d0
@@ -486,11 +504,11 @@ fulled3   move.l    d0,LASTWIN(a4)      - maximum size -
           bra.s     fulled2
 fulled1   move.l    LASTWIN(a4),d3      - de-maximize: back to previous window size -
           move.l    LASTWIN+4(a4),d4
-fulled2   move.l    d3,4(a6)
-          move.l    d4,8(a6)
+fulled2   move.l    d3,INTIN+4(a6)
+          move.l    d4,INTIN+8(a6)
           aes       108 6 5 0 0 0 $fef   ;wind_calc
-          move.l    intout+2,4(a6)
-          move.l    intout+6,8(a6)
+          move.l    INTOUT+2(a6),INTIN+4(a6)
+          move.l    INTOUT+6(a6),INTIN+8(a6)
           aes       105 6 1 0 0 !(a4) 5  ;wind_set
           bsr       movedsub
           move.l    d4,d3
@@ -503,15 +521,15 @@ closed    cmp.w     #22,d0
           lea       straldel,a0
           moveq.l   #1,d0
           bsr       alertbox            Warn "Really discard...?"
-          move.w    intout,d0
+          move.w    INTOUT(a6),d0
           cmp.w     #1,d0
           bne       exec_rts
 closed5   move.l    FENSTER(a4),d0
-          move.l    d0,8(a6)
+          move.l    d0,INTIN+8(a6)
           add.l     #$10001,d0
-          move.l    d0,(a6)
-          move.l    #$100010,4(a6)
-          move.l    FENSTER+4(a4),12(a6)
+          move.l    d0,INTIN+0(a6)
+          move.l    #$100010,INTIN+4(a6)
+          move.l    FENSTER+4(a4),INTIN+12(a6)
           aes       74 8 1 0 0          ;graf_shrinkbox
           aes       102 1 1 0 0 !(a4)   ;wind_close
           aes       103 1 1 0 0 !(a4)   ;wind_delete
@@ -620,13 +638,15 @@ absmod5   tst.b     (a0)
           bsr       win_rdw
           bra       evt_multi
 *--------------------------------------------------------SUB-FUNCTIONS
-hide_m    move.l    #$7b0000,(a5)       hide_cursor
-          clr.w     6(a5)
+hide_m    move.l    #$7b0000,CONTRL+0(a6)       hide_cursor
+          clr.w     CONTRL+6(a6)
           bra       vdicall
-show_m    move.l    #$7a0000,(a5)       show_cursor
-          move.w    #1,6(a5)
-          move.w    #1,(a6)
+          ;
+show_m    move.l    #$7a0000,CONTRL+0(a6)      show_cursor
+          move.w    #1,CONTRL+6(a6)
+          move.w    #1,INTIN+0(a6)
           bra       vdicall
+          ;
 set_xx    ;
           aes       105 3 1 0 0 !(a4) !d0 !d1  ;wind_set
           rts
@@ -637,7 +657,7 @@ rsrc_gad  clr.w     d0
           ;
 get_top   move.l    rec_adr,a1          ** Return handle of top-level window **
           aes       104 2 5 0 0 !(a1) 10  ;wind_get
-          move.w    intout+2,d0
+          move.w    INTOUT+2(a6),d0
           cmp.w     (a1),d0
           rts
           ;
@@ -836,6 +856,19 @@ movedsub  move.w    YX_OFF(a4),d1       ** Set window position **
           swap      d1
           move.w    d2,d1
           move.l    d1,YX_OFF(a4)
+          rts
+          ;
+aescall   move.l    a6,d1
+          add.l     #AESPB,d1
+          move.l    #$c8,d0
+          trap      #2
+          rts
+          ;
+vdicall   move.w    GRHANDLE(a6),CONTRL+12(a6)
+          move.l    a6,d1
+          add.l     #VDIPB,d1
+          moveq.l   #$73,d0
+          trap      #2
           rts
           ;
 **********************************************************************
@@ -1063,6 +1096,7 @@ rand_tab  dc.w      $ffff,$7fff,$3fff,$1fff,$fff,$7ff,$3ff,$1ff,$ff
           dc.w      $7f,$3f,$1f,$f,7,3,1,0
 blk_data  ds.w      10
 *-----------------------------------------------------WINDOW-VARIABLES
+dsect_a6  ds.l      DSECT_SZ/4
 logbase   ds.l      1          Address of screen buffer
 bildbuff  ds.l      1          Address of general buffer
 rec_adr   ds.l      1          Address of current window's record within "wi1", or address of "wiabs" in abs.mode
@@ -1087,5 +1121,5 @@ picname   dc.b    '\*.PIC',0
 straldel  dc.b    '[1][You are discarding your|'
           dc.b    'unsaved image!][Ok|Cancel]',0
 *---------------------------------------------------------------------
-          ;
+          align 2
           END
