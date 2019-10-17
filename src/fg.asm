@@ -571,7 +571,7 @@ kreis4    move.l    d3,d6               D6: X-offset
           bpl.s     kreis9
           not.w     d6
           addq.w    #1,d6
-kreis9    cmp.b     #$2a,choofig+1      Circle?
+kreis9    cmp.w     #$2a,choofig        Circle?
           bne.s     kreis10
           cmp.w     d6,d7               yes -> choose larger of radius values
           bls.s     kreis10
@@ -579,6 +579,7 @@ kreis9    cmp.b     #$2a,choofig+1      Circle?
 kreis10   bsr       kreis_k
           bsr       show_m
           bra       kreis1
+          ;
 kreis3    tst.w     d6                  ---- finalize circle ----
           bmi       tool_rts
           bsr       set_attr
@@ -597,19 +598,19 @@ kreis3    tst.w     d6                  ---- finalize circle ----
           bne.s     kreis6
           cmp.w     #3600,d2
           beq.s     kreis8              -> circle
-kreis6    cmp.w     #$2b,d3
-          beq       kreis12             -> arc of ellipsis
-          move.w    d0,CONTRL+10(a6)
+kreis6    cmp.w     #$2b,d3             ellipsis?
+          beq       kreis12
+          move.w    d0,CONTRL+10(a6)    3=pie, 2=arc
           vdi       11 4 2 !d4 !d5 0 0 0 0 !d6 0 !d1 !d2  ;arc/pie
           bra.s     kreis7
-kreis8    cmp.w     #$2b,d3
-          beq.s     kreis11             -> ellipsis
+kreis8    cmp.w     #$2b,d3             ellipsis?
+          beq.s     kreis11
           move.w    #4,CONTRL+10(a6)
-          vdi       11 3 0 !d4 !d5 0 0 !d6 0  ;filled_circle
+          vdi       11 3 0 !d4 !d5 0 0 !d6 0  ;pie of circle
           bra.s     kreis7
 kreis11   moveq.l   #1,d0
 kreis12   add.w     #4,d0
-          move.w    d0,CONTRL+10(a6)
+          move.w    d0,CONTRL+10(a6)    5=ellipsis; 6=ell-arc; 7=ell-pie
           vdi       11 2 2 !d4 !d5 !d6 !d7 !d1 !d2  ;ellipse/arc/pie
 kreis7    lea       last_koo,a0
           move.w    d4,(a0)             store coords.
@@ -621,14 +622,14 @@ kreis7    lea       last_koo,a0
           move.w    #-1,8(a0)
           bra       ret_attr
           ;
-kreis_k   move.l    chooseg,INTIN+0(a6)
-          cmp.b     #$2b,choofig+1
+kreis_k   move.l    chooseg,INTIN+0(a6)  --- circle/ellipsis rubberband ---
+          cmp.w     #$2b,choofig
           beq.s     kreis_e
           move.w    #2,CONTRL+10(a6)
-          vdi       11 4 2 !d4 !d5 0 0 0 0 !d6 0  ;arc
+          vdi       11 4 2 !d4 !d5 0 0 0 0 !d6 0  ;arc (INTIN filled already above)
           rts
 kreis_e   move.w    #6,CONTRL+10(a6)
-          vdi       11 4 2 !d4 !d5 !d6 !d7  ;elliptical_arc
+          vdi       11 2 2 !d4 !d5 !d6 !d7  ;elliptical_arc
           rts
           ;
 text      bsr       new_1koo            *** Shape: Text ***

@@ -114,7 +114,7 @@ while (<>)
       {
         #die "vdi: missing ADDR parameter in $ARGV line $.\n" unless defined $rest[$rest_idx];
         last if !defined $rest[$rest_idx];
-        print moove("w",$rest[$idx],"INTIN+".($idx*2)."(a6)");
+        print moove("w",$rest[$rest_idx],"INTIN+".($idx*2)."(a6)");
         ++$rest_idx;
       }
     }
