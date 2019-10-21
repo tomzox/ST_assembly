@@ -46,31 +46,38 @@
           ;
 punkt     clr.w     d1                  *** Shape: Pencil ***
           move.b    frpunkt+33,d1
-          bne.s     punkt2
-          clr.l     d0                  ------- Single Pixel ------
-          move.b    frpunkt+35,d0       set drawing mode
-          lea       punktdat,a0
-          move.b    (a0,d0.l),punkt1+1
-punkt4    move.l    d3,d1
-          move.l    d3,d0
-          swap      d0
-          ext.l     d0
-          move.l    logbase,a2          calc. address
-          mulu.w    #80,d1
-          add.l     d1,a2
-          divu      #8,d0
-          add.w     d0,a2
-          swap      d0
-          moveq.l   #7,d2
-          sub.b     d0,d2
+          bne       punkt2
+          ;                             ------- Pencil ------
+          vdi       15 0 1 1            ;polyline type: solid
+          vdi       16 1 0 !frpunkt+6 0 ;line width
+          vdi       17 0 1 !frpunkt+20  ;polyline color index
+          vdi       108 0 2 0 0         ;polyline end style: squared
+          bsr       set_wrmo            ;writing mode
           bsr       hide_m
-punkt1    bclr.b    d2,(a2)             draw dot
-          bsr       show_m
+          move.l    d3,d4
+          move.w    frpunkt+6,d0
+          cmp       #1,d0               line width larger than 1?
+          beq       punkt1
+          subq.w    #1,d0               yes: draw initial dot: square with line width
+          swap      d0                  ;(needed as VDI does not draw anything when X1/Y1==X2/Y2)
+          ext.w     d0
+          add.l     d3,d0
+          move.l    d0,PTSIN+0(a6)
+          move.l    d3,PTSIN+4(a6)
+          vdi       6 2 0               ;polyline
+          bra.s     punkt4
+punkt1    move.l    d3,PTSIN+0(a6)      -- Loop while mouse button pressed --
+          move.l    d4,PTSIN+4(a6)
+          vdi       6 2 0               ;polyline: draw from prev. to current mouse coord.
+punkt4    bsr       show_m
           bsr       new_1koo            Pos. merken
+          move.l    d3,d4
           bsr       noch_qu
-          move.b    maus_rec+1,d0
-          bne       punkt4              -> another dot to draw
-          bra       hide_m
+          bsr       hide_m
+          move.l    last_koo+4,d0
+          move.b    maus_rec+1,d1
+          bne       punkt1              -> another dot to draw
+          bra       ret_attr
           ;
 punkt2    addq.b    #1,d1               ------ Polymarker ------
           vdi       18 0 1 !d1          ;set_polymarker_type
@@ -81,7 +88,7 @@ punkt2    addq.b    #1,d1               ------ Polymarker ------
           vdi       20 0 1 !frpunkt+20  ;...color_index
           bsr       set_wrmo            ;...writing_mode
           bsr       clip_on
-punkt3    bsr       hide_m
+punkt3    bsr       hide_m              -- Loop while mouse button pressed --
           bsr       new_1koo
           move.l    d3,PTSIN+0(a6)
           vdi       7 1 0               ;polymarker
@@ -318,7 +325,6 @@ radier1   bsr       hide_m              ++ loop ++
 kurve     bra       hide_m              *** Curve ***
           ;
 *=================================================================DATA
-punktdat  dc.b  %10010010,%11010010,%01010010,0
 pin_data  dc.w  0,1     ; shape "|"
           dc.w  1,0     ; shape "-"
           dc.w  1,-1    ; shape "/"
