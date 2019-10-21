@@ -38,7 +38,7 @@
  XREF  init_ted,copy_blk,maus_neu,fram_ins,maus_bne
  ;
  XDEF  choofig,chooset,chooseg,drei_chg,get_koos,over_que,directory
- XDEF  now_offs,alertbox,evt_menu,wind_chg
+ XDEF  alertbox,evt_menu,wind_chg
  ;
 **********************************************************************
 *   Global register mapping:
@@ -66,18 +66,19 @@ nr_zwei   cmp.l     #$50000,d0
           bhs       nr_drei
           cmp.b     #$1d,d0
           bne       new
-          bsr       wind_chg            --- Command: Discard ---
+          bsr       wind_chg            --- Command: Quit ---
           bne.s     mainrts3
-          moveq.l   #6,d0
+          moveq.l   #WIN_STRUCT_CNT-1,d0
           lea       wi1,a0
-mainrts2  btst.b    #1,INFO(a0)         Image saved or empty?
+mainrts2  btst.b    #1,INFO(a0)         any image modified?
           bne.s     mainrts3
+          add.l     #WIN_STRUCT_SZ,a0
           dbra      d0,mainrts2
           bra.s     mainrts1
-mainrts3  moveq.l   #1,d0
+mainrts3  moveq.l   #1,d0               yes -> ask for confirmation
           lea       stralneu,a0
-          bsr       alertbox            no -> ask for confirmation
-          cmp.w     #1,d0
+          bsr       alertbox
+          cmp.w     #1,d0               abort unless confirmed
           bne       men_inv
 mainrts1  ;
           move.l    maus_rec+4,CONTRL+14(a6)
@@ -100,14 +101,16 @@ new       cmp.b     #$16,d0
           cmp.w     #1,d0
           bne       men_inv             not confirmed -> abort
 new1      bsr       fram_del
-          move.l    menu_adr,a0
-          bset      #3,491(a0)          disable "undo"
-          bset.b    #3,635(a0)          disable "save"
+          moveq.l   #$14,d0             disable "undo"
+          bsr       men_idis
+          moveq.l   #$1a,d0             disable "save"
+          bsr       men_idis
           lea       drawflag,a1
           move.l    12(a1),d0
           cmp.l     BILD_ADR(a4),d0
           bne.s     new4
-          bset.b    #3,1643(a0)         disable "paste"
+          moveq.l   #$44,d0             disable "paste (selection)"
+          bsr       men_idis
           lea       mrk,a0
           clr.w     EINF(a0)
 new4      lea       mark_buf,a0
@@ -178,7 +181,7 @@ open4     movem.l   a0/d1,-(sp)
           move.l    d0,BILD_ADR(a4)
           bmi       open12              malloc failed?
           move.w    d1,WIN_HNDL(a4)     initialize window record
-          move.b    #1,INFO(a4)
+          move.b    #1,INFO(a4)         initialze window state flags: open,unmodified
           move.b    1(a0),LASTNUM(a4)
           move.l    d0,a0               clear window buffer
           move.w    #1999,d0
@@ -188,13 +191,14 @@ open6     clr.l     (a0)+
           clr.l     (a0)+
           dbra      d0,open6
           move.l    a4,rec_adr
-          move.l    menu_adr,a0
-          bset      #3,635(a0)          disable "save"
-          lea       now_offs,a1
-          moveq.l   #4,d0               enable menu entries
-open5     add.w     (a1)+,a0
-          bclr.b    #3,(a0)
-          dbra      d0,open5
+          moveq.l   #$16,d0             enable "discard"
+          bsr       men_iena
+          moveq.l   #$19,d0             enable "save as"
+          bsr       men_iena
+          moveq.l   #$1a,d0             disable "save"
+          bsr       men_idis
+          moveq.l   #$1b,d0             enable "print"
+          bsr       men_iena
           bsr       koo_chk             disable "Coordinates" if needed
           add.w     #1,wi_count
           cmp.w     #7,wi_count         7 windows open?
@@ -349,6 +353,7 @@ load9     move.w    handle,-(sp)        ++ close ++
           bne       men_inv
           bsr       men_inv
           bra       win_rdw
+          ;
 load_red  move.l    a2,-(sp)            ++ read data from file ++
           move.l    d2,-(sp)            D0: length
           move.w    handle,-(sp)
@@ -356,23 +361,28 @@ load_red  move.l    a2,-(sp)            ++ read data from file ++
           trap      #1
           lea       12(sp),sp
           rts
+          ;
 load_bad  lea       stralbad,a0         ++ format error ++
           moveq.l   #1,d0
           bsr       alertbox
           moveq.l   #-1,d3
           bra       load9
+          ;
 load_opn  bsr       wind_chg            ++ prepare window ++
           bne.s     load_op2
-          btst.b    #2,INFO(a4)
+          btst.b    #0,INFO(a4)         a window already open?
+          beq.s     load_op2
+          btst.b    #2,INFO(a4)         virgin?
           bne.s     load_op2
-          move.w    mark_buf,d0
-          beq       set_name
+          move.w    mark_buf,d0         selection ongoing?
+          beq       set_name            no -> use already open window
 load_op2  bsr       open
           tst.b     d0                  error?
           beq       set_name
           addq.l    #4,sp
           moveq.l   #-1,d3
           bra       load9
+          ;
 tos_err   neg.w     d0                  ++ report error ++
           aes       53 1 1 0 0 !d0
           bra       men_inv
@@ -459,42 +469,43 @@ regen1    move.l    (a0),d0
           move.l    (a1),(a0)+
           move.l    d0,(a1)+
           dbra      d1,regen1
-          move.b    drawflag+1,d0       moving?
+          move.b    drawflag+1,d0       undo of selection movement?
           beq       regen2
-          lea       drawflag+4,a0
+          lea       drawflag,a0
           lea       mark_buf,a1
           move.w    #-1,(a1)+
-          move.l    (a0),d0
-          move.l    4(a0),d1
-          move.l    (a1),(a0)
-          move.l    4(a1),4(a0)
+          move.l    4(a0),d0
+          move.l    8(a0),d1
+          move.l    (a1),4(a0)
+          move.l    4(a1),8(a0)
           move.l    d0,(a1)
           move.l    d1,4(a1)
           bpl.s     regen4
           clr.w     -2(a1)              ++ clear window frame ++
           move.l    menu_adr,a2
-          bset.b    #3,1667(a2)
-          cmp.l     #$12345678,8(a0)    is pasting allowed?
+          bset.b    #3,1667(a2)         disable "discard" menu entry
+          cmp.l     #$12345678,12(a0)   is pasting allowed?
           beq.s     regen7
-          bclr.b    #3,1643(a2)         yes -> enable paste
+          move.l    BILD_ADR(a4),12(a0) yes
           move.w    #$ff00,mrk+EINF
-          move.l    BILD_ADR(a4),8(a0)
-regen7    add.w     #1739,a2
-          moveq.l   #7,d0
-regen3    bset.b    #3,(a2)
-          add.w     #24,a2
+          moveq.l   #$44,d0             enable "paste (selection)" menu entry
+          bsr       men_iena
+regen7    moveq.l   #7,d2
+regen3    move.l    d2,d0
+          add.l     #$48,d0             disable all selection commands
+          bsr       men_idis
           dbra      d0,regen3
           bra.s     regen2
 regen4    move.l    menu_adr,a0         ++ Generated frame ++
           bset.b    #3,1643(a0)
           move.b    mrk+OV,d0
           beq.s     regen6
-          bclr.b    #3,1643(a0)         Enable discard
-          bclr.b    #3,1667(a0)
-regen6    add.w     #1739,a0
-          moveq.l   #7,d0
-regen5    bclr.b    #3,(a0)
-          add.w     #24,a0
+          bclr.b    #3,1643(a0)
+          bclr.b    #3,1667(a0)         Enable "discard" menu entry
+regen6    moveq.l   #7,d2
+regen5    move.l    d2,d0
+          add.l     #$48,d0             Enable all selection commands
+          bsr       men_iena
           dbra      d0,regen5
 regen2    bsr       men_inv
           bra       win_rdw
@@ -929,7 +940,7 @@ nr_drei   cmp.l     #$60000,d0
           bhs       drei_2e
           move.w    d0,d2               --- Shape selection ---
           move.w    choofig,d0
-          cmp.w     #$43,d0
+          cmp.w     #$43,d0             selection?
           bne.s     drei_chg
           bsr       over_que            ask to confirm "commit selection?"
           bne       men_inv
@@ -944,7 +955,7 @@ drei_chg  move.w    choofig,d0          disable prev. tool
           move.w    d2,(a0)
           moveq.l   #1,d1
           bsr       check_xx
-          lea       chootab,a0
+          lea       chootab,a0          ++ en/disable shape options in menu ++
           cmp.b     #$43,d2
           bhs.s     figur1
           cmp.b     #$2c,d2
@@ -960,7 +971,7 @@ drei_chg  move.w    choofig,d0          disable prev. tool
           addq.l    #1,a0
 figur1    moveq.l   #3,d0               enable resp. attributes
           move.l    menu_adr,a3
-          add.w     #1115,a3            addr. of state: 43*24+11
+          add.w     #1115,a3            addr. of state: $2e*24+11
 figur2    bset      #3,(a3)
           btst.b    d0,(a0)
           beq.s     figur3
@@ -1035,19 +1046,19 @@ chrout    move.w    d0,-(sp)            ** print one byte **
           addq.l    #4,sp
           rts
           ;
-koo_chk   move.l    menu_adr,a0         Enable/disable "Coordinates"
-          bclr.b    #3,2075(a0)
-          move.w    choofig,d0
-          cmp.b     #$55,d0
+koo_chk   move.w    choofig,d0           Enable/disable "Coordinates"
+          cmp.b     #$55,d0             selected shape == coordinates?
           beq.s     koo_chk2
-          cmp.b     #$43,d0
+          cmp.b     #$43,d0             selection?
           beq.s     koo_chk3
           lea       koanztab,a1
           sub.w     #$1f,d0
           tst.b     (a1,d0.w)
           bne.s     koo_chk3
-koo_chk2  bset.b    #3,2075(a0)
-koo_chk3  rts
+koo_chk2  moveq.l   #$56,d0             disable "coordinates"
+          bra       men_idis
+koo_chk3  moveq.l   #$56,d0             enable "coordinates"
+          bra       men_iena
           ;
 wind_chg  btst.b    #1,INFO(a4)         ** Image modified? **
           bne.s     wind_ch1
@@ -1163,8 +1174,10 @@ set_nam3  move.b    (a1)+,(a0)+         file name
           add.w     #32010,a0
           tst.b     (a0)
           beq.s     name_xx
-          move.l    menu_adr,a1         enable saving
-          bclr.b    #3,635(a1)
+          move.l    a0,a2
+          moveq.l   #$1a,d0             enable "save"
+          bsr       men_iena
+          move.l    a2,a0
 name_xx   move.l    a0,INTIN+4(a6)
           aes       105 4 1 0 0 !(a4) 2  ;wind_set: window title
           rts
@@ -1204,11 +1217,18 @@ get_koo4  move.w    34(a2),4(a1)
           move.w    48(a2),6(a1)
           rts
 *-------------------------------------------------------MENU-VARIABLES
-choofig   dc.w   $1f
-chooseg   dc.w   0,3600
-chooset   dc.w   0,0,1,0
-chootab   dc.b   %0000,%1110,%1010,%1011
-now_offs  dc.w   539,72,48,1344,24
+choofig   dc.w   $1f                    ID of selected shape (menu item ID)
+chooseg   dc.w   0,3600                 start and end angle for arc in 1/10th degree
+          ;                             --- Shape menu option state ---
+chooset   dc.w   0                      option "fill shape"
+          dc.w   0                      option "rounded corners"
+          dc.w   1                      option "shape borders"
+          dc.w   0                      option "segment" (arc)
+          ;                             --- Shape option compatibility ---
+chootab   dc.b   %0000                  allow none
+          dc.b   %1110                  rectangle etc: allow fill,rounded-bd.,border
+          dc.b   %1010                  polygon: fill+border (but not rounded)
+          dc.b   %1011                  circle etc: allow fill+border+arc
 *--------------------------------------------------------------STRINGS
 nulstr    dc.b   0,0
 directory ds.w   35
@@ -1252,7 +1272,7 @@ stralovq  dc.b   '[1][You are about to commit the|'
 *------------------------------------------------------------------I/O
 dta       ds.w   25
 logo_buf  ds.w   5
-handle    ds.w   1
+handle    ds.w   1              ; temporary used during load & store
 escfeed   dc.b   27,65,8,0
 eschigh   dc.w   $1b4c,0000,0
 drucktab  dc.b   $ff,$7f,$3f,$1f,$0f,$07,$03,$01

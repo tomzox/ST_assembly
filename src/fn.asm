@@ -61,7 +61,7 @@ nr_vier   cmp.l     #$70000,d0
           not.b     1(a2)
           bsr       maus_neu
           move.l    menu_adr,a1
-          add.w     #1572,a1
+          add.w     #1572,a1            A1: address of menu item string
           tst.w     (a2)
           beq.s     mausel1
           move.l    (a1),2(a2)          pre-select shape "cross"
@@ -89,7 +89,7 @@ attrib11  move.w    d0,d2
           sub.b     #4,d0
           lsl.w     #1,d0
           lea       fr_tab,a0           calc. address of the dialog data
-          lea       frmodus,a2
+          lea       frbase,a2
           add.w     (a0,d0.w),a2
           bsr       form_do             display the dialog window
 attrib13  cmp.w     (a2),d4             abort button clicked?
@@ -233,6 +233,15 @@ nr_fuenf  cmp.l     #$80000,d0
           cmp.b     #$43,d0
           bne.s     fuenf_48
           move.w    d0,d2               --- Selection on/off ---
+          tst.b     mrk+OV
+          beq       fuenf_43            overlay mode enabled?
+          bsr       over_alo            allocate buffer for overlay, if not yet done
+          tst.w     mrk+OV              success?
+          bne       fuenf_43
+          moveq.l   #$53,d0             uncheck "overlay" menu item
+          clr.w     d1
+          bsr       check_xx
+fuenf_43  moveq.l   #$43,d2
           bra       drei_chg
           ;
 fuenf_48  cmp.b     #$48,d0
@@ -254,8 +263,8 @@ white1    bsr       save_scr
           move.l    BILD_ADR(a4),a0
           bsr       work_blk            execute raster operation
           move.w    #$ff00,drawflag
-          move.l    menu_adr,a0
-          bclr.b    #3,491(a0)
+          moveq.l   #$14,d0
+          bsr       men_iena
           bsr       men_inv
           bra       win_rdw
           ;
@@ -280,7 +289,7 @@ knupf1    moveq.l   #$52,d0
           ;
 fuenf_51  cmp.b     #$51,d0
           bne.s     fuenf_53
-          lea       mrk,a0              --- Paste ---
+          lea       mrk,a0              --- Copy ---
           not.b     COPY(a0)
           move.b    COPY(a0),d1
           and.w     #1,d1
@@ -290,7 +299,7 @@ fuenf_51  cmp.b     #$51,d0
 fuenf_53  cmp.b     #$53,d0
           bne       fuenf_44
           move.b    mrk+OV,d0           --- Overlay Mode ---
-          beq.s     overlay1
+          beq       overlay1
           bsr       over_que            ++ End ++
           bne       men_inv
           move.l    mrk+BUFF,-(sp)
@@ -302,25 +311,23 @@ fuenf_53  cmp.b     #$53,d0
           lea       mrk,a0
           clr.b     OV(a0)
           move.l    #-1,BUFF(a0)
-          move.l    menu_adr,a0
-          bset.b    #3,1643(a0)         disable paste/discard/commit
-          bset.b    #3,1667(a0)
-          bset.b    #3,1691(a0)
+          moveq.l   #$44,d0             disable "paste (selection)"
+          bsr       men_idis
+          moveq.l   #$45,d0             disable "discard (selection)"
+          bsr       men_idis
+          moveq.l   #$46,d0             disable "commit (selection)"
+          bsr       men_idis
           bra.s     overlay2
-overlay1  move.l    #32010,-(sp)        ++ Set ++
-          move.w    #$48,-(sp)
-          trap      #1
-          addq.l    #6,sp
-          tst.l     d0
-          bmi.s     overlay3
-          lea       mrk,a2
-          move.w    #$ff00,OV(a2)
-          move.l    d0,BUFF(a2)
+overlay1  bsr       over_alo            ++ Enable overlay mode: alloc memory ++
+          tst.w     mrk+OV              out of memory?
+          beq.s     overlay3
           move.w    mark_buf,d0         Existing selection?
           beq.s     overlay2
           bsr       over_beg
-          move.l    menu_adr,a0         enable "discard"
-          bclr.b    #3,1667(a0)
+          moveq.l   #$45,d0             enable "discard (selection)"
+          bsr       men_iena
+          moveq.l   #$45,d0
+          bsr       men_iena
 overlay2  moveq.l   #$53,d0             check/uncheck menu item
           move.b    mrk+OV,d1
           ext.w     d1
@@ -373,17 +380,20 @@ einfug3   bsr       copy_blk
           move.l    #$ffff0000,(a0)+
           move.l    #-1,(a0)+
           move.l    #-1,(a0)
-          move.l    menu_adr,a0         enable/disable menu items
-          bclr.b    #3,491(a0)
-          bset.b    #3,1643(a0)
+          moveq.l   #$14,d0             enable "undo" menu entry
+          bsr       men_iena
+          moveq.l   #$44,d0
+          bsr       men_idis
           lea       mrk,a1
           tst.b     OV(a1)
           beq.s     einfug4
-          bclr.b    #3,1667(a0)
+          moveq.l   #$45,d0             enable "discard (selection)"
+          bsr       men_iena
           clr.b     CHG(a1)
           clr.b     PART(a1)
           clr.w     MODI(a1)
-einfug4   add.w     #1739,a0
+einfug4   move.l    menu_adr,a0
+          add.w     #1739,a0
           moveq.l   #7,d0
 einfug1   bclr.b    #3,(a0)
           add.w     #24,a0
@@ -402,9 +412,10 @@ einfug5   lea       mrk,a2              ++ OV-Mode-II ++
           move.b    d3,COPY(a2)
           lea       drawflag,a0
           clr.w     (a0)
-          move.l    menu_adr,a0
-          bset.b    #3,491(a0)
-          bset.b    #3,1643(a0)
+          moveq.l   #$14,d0             disable "undo"
+          bsr       men_idis
+          moveq.l   #$44,d0             disable "paste (selection)"
+          bsr       men_idis
           bra       men_inv
           ;
 fuenf_45  cmp.b     #$45,d0
@@ -435,9 +446,10 @@ werfweg3  lea       mark_buf,a0
 werfweg1  move.l    (a0)+,(a1)+
           move.l    (a0)+,(a1)+
           dbra      d0,werfweg1
-          move.l    menu_adr,a0
-          bclr.b    #3,491(a0)
-          bset.b    #3,1643(a0)
+          moveq.l   #$14,d0             enable "undo"
+          bsr       men_iena
+          moveq.l   #$44,d0             disable "paste"
+          bsr       men_idis
           bsr       men_inv
           bra       win_rdw
           ;
@@ -483,16 +495,17 @@ ueber2    lea       fruebern,a2         + ask user +
 ueber3    btst      #1,d4
           beq.s     ueber4
           clr.b     PART(a0)            remove clipped part
-          lea       drawflag,a0         and disable "undo"
-          clr.w     (a0)
-          move.l    menu_adr,a0
-          bset.b    #3,491(a0)
-ueber4    tst.b     MODI(a0)            + keep "commit" enabled? +
+          lea       drawflag,a1         and disable "undo"
+          clr.w     (a1)
+          moveq.l   #$14,d0             disable "undo"
+          bsr       men_idis
+ueber4    lea       mrk,a0
+          tst.b     MODI(a0)            + keep "commit" enabled? +
           bne       men_inv
           tst.b     PART(a0)
           bne       men_inv
-          move.l    menu_adr,a0
-          bset.b    #3,1691(a0)
+          moveq.l   #$46,d0             disable "commit"
+          bsr       men_idis
           bra       men_inv
           ;
 fuenf_4b  cmp.b     #$4b,d0
@@ -567,8 +580,8 @@ spihor4   lea       80(a2),a0
           dbra      d7,spihor1
           lea       drawflag,a0         enable "undo"
           move.w    #$ff00,(a0)
-          move.l    menu_adr,a0
-          bclr.b    #3,491(a0)
+          moveq.l   #$14,d0
+          bsr       men_iena
           bsr       men_inv
           bra       win_rdw
 spihor5   cmp.w     #-1,d4              is width two words?
@@ -695,8 +708,8 @@ spiver12  move.l    mark_buf+2,d2       + shift +
           bsr       copy_blk
 spiver10  lea       drawflag,a0         enable "undo"
           move.w    #$ff00,(a0)
-          move.l    menu_adr,a0
-          bclr.b    #3,491(a0)
+          moveq.l   #$14,d0
+          bsr       men_iena
           bsr       men_inv
           bra       win_rdw
 spiver3   cmp.w     #-1,d4
@@ -782,15 +795,24 @@ men_inv   ;
 men_exit  rts
           ;
 check_xx  ;
-          aes       31 2 1 1 0 !d0 !d1 !menu_adr  ;wind_set:check
+          aes       31 2 1 1 0 !d0 !d1 !menu_adr  ;menu_icheck
+          rts                                      D0:index/D1:0-1
+men_idis  ;
+          aes       32 2 1 1 0 !d0 0 !menu_adr  ;menu_ienable (intin[1]:=disable)
+          rts                                      D0:index/D1:0-1
+men_iena  ;
+          aes       32 2 1 1 0 !d0 1 !menu_adr  ;menu_ienable (intin[1]:=enable)
           rts                                      D0:index/D1:0-1
           ;
-maus_bne  moveq.l   #2,d0
-          bra.s     maus_alt+2
+maus_bne  moveq.l   #2,d0               shape: bee
+          bra.s     maus_al2
 maus_neu  move.w    choomou,d0          ** current mouse pointer shape **
-          bra.s     maus_alt+2
-maus_alt  clr.w     d0
-          aes       78 1 1 1 0 !d0 !maus_adr  ;set_mouse_form
+          bra.s     maus_al2
+maus_alt  clr.w     d0                  shape: arrow
+maus_al2  move.l    a0,-(sp)
+          lea       maus_blk,a0
+          aes       78 1 1 1 0 !d0 !a0  ;set_mouse_form
+          move.l    (sp)+,a0
           rts
 obj_off   ;
           aes       44 1 3 1 0 !d0 !a3  ;XY-Koo. des D0. Objektes
@@ -842,13 +864,29 @@ over_ol1  lea       mrk,a0
           move.b    #-1,CHG(a0)         modification done
           move.b    MODI(a0),MODI+1(a0)
           clr.b     MODI(a0)
-          move.l    menu_adr,a1
-          bclr.b    #3,1643(a1)
-          tst.b     PART(a0)
-          bmi       men_exit
-          bset.b    #3,1691(a1)         disable "commit"
-          rts
+          moveq.l   #$44,d0             enable "paste (selection)"
+          bsr       men_iena
+          tst.b     mrk+PART
+          bmi.s     over_ol3
+          moveq.l   #$46,d0             disable "commit"
+          bsr       men_idis
+over_ol3  rts
           ;
+over_alo  tst.l     mrk+BUFF            ** Allocate memory for selection overlay buffer **
+          bne       over_al1
+          move.l    #32010,-(sp)
+          move.w    #$48,-(sp)
+          trap      #1
+          addq.l    #6,sp
+          lea       mrk,a0
+          tst.l     d0
+          bmi.s     over_al2
+over_al1  move.w    #$ff00,OV(a0)
+          move.l    d0,BUFF(a0)
+          rts
+over_al2  clr.w     OV(a0)
+          rts
+
 over_beg  move.w    #1999,d0            ** Prepare overlay mode **
           move.l    rec_adr,a0
           move.l    BILD_ADR(a0),a0
@@ -1043,18 +1081,18 @@ form_tk6  add.w     #24,a0
           ;
 form_rdw  move.l    a2,-(sp)            --- insert defaults ---
           move.w    form_buf,d0
-          beq.s     form_rw3
+          beq.s     form_rw2
           move.w    form_buf+2,4(a2)
           move.w    form_buf+4,18(a2)
           move.w    form_buf+6,32(a2)
-form_rw3  move.w    (a2),d0             ++ Tedinfos ++
-          bmi.s     form_rw4
+form_rw2  move.w    (a2),d0             ++ Tedinfos ++
+          bmi.s     form_rw3
           move.w    TED_VAL(a2),d0      insert default values
           bsr.s     form_wrt
           add.w     #14,a2
-          bra       form_rw3
-form_rw4  addq.l    #2,a2               ++ radio-buttons ++
-          clr.w     d0
+          bra       form_rw2
+form_rw3  addq.l    #2,a2               ++ radio-buttons ++
+form_rw4  clr.w     d0
           move.b    (a2)+,d0
           beq.s     form_rw8
           mulu.w    #24,d0
@@ -1071,7 +1109,7 @@ form_rw7  add.w     #24,a0
           addq.b    #1,d0
           btst.b    #4,9(a0)
           bne       form_rw5
-          bra       form_rw4+2
+          bra       form_rw4
 form_rw8  move.l    (sp)+,a2            ++ check-buttons ++
           cmp.w     #16,(a2)
           bne.s     form_rw1
@@ -1146,8 +1184,9 @@ form_mu5  addq.l    #1,a1
           dbra      d1,form_mu4
           add.w     #624,a1
           dbra      d0,form_mu3
-          bra.s     form_mus+4
+          bra.s     form_mu7
 form_mus  bsr       hide_m              ** Fill pattern demo box **
+form_mu7  ;
           vdi       23 0 1 !6(a2)
           vdi       24 0 1 !20(a2)
           vdi       25 0 1 1
@@ -1240,14 +1279,15 @@ init_te1  moveq.l   #8,d0
           rts
 *-------------------------------------------------------MENU-VARIABLES
 menu_adr  ds.l    1
-choopat   dc.w    $aaaa
-chooras   dc.w    0
+choopat   dc.w    $aaaa                 ; bitmask of user-defined line pattern
+chooras   dc.w    0                     ; flag: grid mode enabled?
 chootxt   dc.w    0
-choomou   dc.w    0,0,0
-          dc.b    '  Pfeil-Maus'
-          dc.w    0
-chookoo   dc.w    0,-1,-1
-choofil   dcb.w   16,0
+choomou   dc.w    0                     ; flag: 0:=normal mouse shape; $ff:cross
+          dc.w    0,0                   ; address of "Cross" menu item text
+          dc.b    '  Pfeil-Maus',0      ; alternative menu item text
+chookoo   dc.w    0                     ; flag: 0:disabled; 1:enable mouse coord. display in menu bar
+          dc.w    -1,-1                 ; last written mouse X/Y coords.
+choofil   dcb.w   16,0                  ; bitmasks of user-defined fill pattern
 koanztab  dc.b    1,0,0,1,1,1,0,3,3,3,1,3,3,3
 *--------------------------------------------------------------STRUCTS
 mrk       dcb.w   14,0
@@ -1255,7 +1295,6 @@ comb_dat  dc.b    0,1,6,7,2,11,4,13,14,9,8
 work_dat  dc.w    0,15,10
 mfdb_q    dc.w    0000,0000,00,00,40,0,1,0,0,0
           dc.w    0000,0000,00,00,40,0,1,0,0,0
-maus_adr  dc.l    maus_blk
 maus_blk  dc.w    7,7,1,0,1,$fffe,$fffe,$c386,$c386,$c386,$c386,$fc7e
           dc.w    $fc7e,$fc7e,$c386,$c386,$c386,$c386,$fffe,$fffe,0
           dc.w    $fffe,$8102,$8102,$8102,$8102,$8102,$8002,$fc7e
@@ -1275,10 +1314,10 @@ stralcut  dc.b    '[1][The part of selection outside|'
 *   Ok-Nr, { TED-Nr,L„nge-1,Default,Index*256+min,max,Offset.l } ,-1,
 *          { Button-Nr*256+selected Button } ,0
 *- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-frinfobo  dc.w  08,-1,0
-frsegmen  dc.w  09,4,2,0,8,360,0,0,4,0,0,8,9,0,3
+frinfobo  dc.w   8,-1,0
+frsegmen  dc.w   9,4,2,0,8,360,0,0,4,0,0,8,9,0,3
           dc.w     4,2,0,8,360,0,4,4,0,0,8,9,0,7,-1,0
-frkoordi  dc.w  08,6,2,0,4,639,0,0,6,2,0,4,399,0,3
+frkoordi  dc.w   8,6,2,0,4,639,0,0,6,2,0,4,399,0,3
           dc.w     7,2,0,5,639,0,0,7,2,0,5,399,0,3,-1,0
 frbase:
 frmodus   dc.w  10,-1,$600,0
@@ -1289,7 +1328,7 @@ frmuster  dc.w  11,13,0,1,$107,4,0,0,14,1,1,9,24,0,0
           dc.w     15,0,1,10,1,0,0,-1,0
 frtext    dc.w  23,16,1,13,$40a,26,0,0,17,2,0,11,270,0,0
           dc.w     18,0,1,12,1,0,0,-1,$f01,$1300,0
-frradier  dc.w  09,19,1,16,$103,99,0,0,19,1,10,$103,99,0,2,-1,$600,0
+frradier  dc.w   9,19,1,16,$103,99,0,0,19,1,10,$103,99,0,2,-1,$600,0
 frlinie   dc.w  20,20,0,1,3,1,0,0,21,1,1,$105,40,0,0
           dc.w     22,0,1,$108,7,0,0,-1,$b00,$f00,0
 frdrucke  dc.w  16,-1,$300,$600,$d00,0
@@ -1319,4 +1358,5 @@ fr_tab    dc.w    frmodus-frbase
           dc.w    frdatei-frbase
 form_buf  ds.w    4
 *---------------------------------------------------------------------
+          align   2
           end

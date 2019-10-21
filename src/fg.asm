@@ -32,7 +32,7 @@
  ;
  XREF  frmodus,frmuster,frtext,frlinie,frraster,frzeiche
  XREF  chookoo,choofig,chooset,chooras,chootxt,choopat,chooseg
- XREF  menu_adr,rec_adr,drawflag,mrk,logbase,bildbuff
+ XREF  rec_adr,drawflag,mrk,logbase,bildbuff
  XREF  maus_rec,copy_blk,save_scr,fram_del,form_do,form_del
  XREF  hide_m,show_m,work_blk,work_bl2,alertbox,pinsel,spdose,gummi
  XREF  punkt,kurve,radier,over_old,over_que,over_beg,mfdb_q,stack
@@ -74,9 +74,12 @@ evt_butt  lea       win_xy,a0           WIN_XY: window coords.
 evt_but5  move.l    drawflag+12,d0      ++ regular tool ++
           cmp.l     BILD_ADR(a4),d0
           bne.s     evt_but4
-          clr.w     mrk+EINF            disable "paste"
-          move.l    menu_adr,a0
-          bset.b    #3,1643(a0)
+          lea       mrk,a0              disable "paste" flag
+          tst.w     EINF(a0)
+          beq.s     evt_but4
+          clr.w     EINF(a0)
+          moveq.l   #$44,d0             disable "paste (selection)" menu entry
+          bsr       men_idis
 evt_but4  bsr       save_scr
           lea       drawflag,a0
           move.w    #$ff00,(a0)
@@ -126,11 +129,11 @@ exit1     move.b    drawflag,d0
           move.l    logbase,a0
           bsr       copy_blk
           ;
-exit3     move.l    menu_adr,a0
-          bclr.b    #3,491(a0)          enable "undo"
-          move.w    mark_buf,d0
+exit3     moveq.l   #$14,d0             enable "undo" menu entry
+          bsr       men_iena
+          move.w    mark_buf,d0         selection ongoing?
           beq.s     exit6
-          bsr       fram_drw
+          bsr       fram_drw            draw frame around selected area
 exit6     bsr       show_m
 exit7     move.b    maus_rec+1,d0       wait for mouse button to be released
           bne       exit7
@@ -518,21 +521,24 @@ markier2  add.w     win_xy+8,d5         convert coords. to abs.
           lea       last_koo,a1         save coords.
           move.l    2(a0),(a1)
           move.l    6(a0),4(a1)
-          bsr       fram_drw
-          move.l    menu_adr,a2
-          bset.b    #3,1643(a2)
+          bsr       fram_drw            draw selection border
           move.b    mrk+OV,d0           overlay mode?
-          beq.s     markier5
+          beq.s     markier7
           bsr       over_beg
-          bclr.b    #3,1667(a2)         enable "discard" command
-          move.b    mrk+COPY,d0
+          moveq.l   #$45,d0             enable "discard (selection)" menu entry
+          bsr       men_iena
+          move.b    mrk+COPY,d0         copy mode enabled?
           bne.s     markier5
-          bclr.b    #3,1643(a2)
-markier5  lea       1739(a2),a0
-          moveq.l   #7,d0               enable menu commands
-markier3  bclr.b    #3,(a0)
-          add.w     #24,a0
-          dbra      d0,markier3
+          moveq.l   #$44,d0             enable "paste (selection)" menu entry
+          bsr       men_iena
+          bra.s     markier5
+markier7  moveq.l   #$44,d0             copy mode -> disable "paste (selection)" menu entry
+          bsr       men_idis
+markier5  moveq.l   #7,d2               enable menu commands
+markier3  move.l    d2,d0
+          add.l     #$48,d0
+          bsr       men_iena
+          dbra      d2,markier3
           lea       mrk,a0
           clr.b     EINF(a0)            no paste
           clr.b     OVKU(a0)
@@ -636,7 +642,7 @@ text      bsr       new_1koo            *** Shape: Text ***
           move.l    rec_adr,a0
           bsr       save_buf
           lea       data_buf,a2
-          move.l    d3,(a2)
+          move.l    d3,(a2)             store mouse X/Y-pos
           bsr       text_att            configure attributes
           lea       stack,a3
 text3     move.b    maus_rec+1,d0       wait for button release
@@ -968,7 +974,7 @@ schub26   move.l    (a0)+,(a1)+
           dbra      d3,schub26
           lea       win_xy,a0
           clr.l     (a0)+
-          move.l    #$27f018f,(a0)+
+          move.l    #$27f018f,(a0)+     (640-1)x(400-1)
           lea       stack+4,a1
           move.w    (a0)+,d0
           move.w    (a0),d1
@@ -981,11 +987,9 @@ schub26   move.l    (a0)+,(a1)+
           move.l    stack+28,d1
           sub.l     stack+24,d1
           lea       mrk,a0
-          move.l    menu_adr,a1
           cmp.l     d0,d1
           beq.s     schub22
           sne.b     PART(a0)
-          bclr.b    #3,1691(a1)         enable "commit" command
           move.l    stack+24,OLD(a0)
           move.l    stack+28,OLD+4(a0)
           move.l    mark_buf+2,OLD+8(a0)
@@ -993,12 +997,15 @@ schub26   move.l    (a0)+,(a1)+
           sub.w     d0,OLD+8(a0)
           move.w    stack+6,d0
           sub.w     d0,OLD+10(a0)
+          moveq.l   #$46,d0             enable "commit (selection)"
+          bsr       men_iena
           bra.s     schub21
-schub22   bset.b    #3,1691(a1)
-          move.l    stack+24,OLD(a0)
+schub22   move.l    stack+24,OLD(a0)
           bclr.b    #7,PART(a0)
           bne.s     schub21
           clr.b     PART(a0)
+          moveq.l   #$46,d0             disable "commit (selection)"
+          bsr       men_idis
 schub21   lea       mrk,a0              + set flags +
           clr.w     EINF(a0)            pasting done
           move.b    stack+12,d0
@@ -1009,18 +1016,15 @@ schub21   lea       mrk,a0              + set flags +
           beq       exit_beg
           move.b    VMOD(a0),MODI(a0)   store V-Mode
           beq       exit3
-          move.l    menu_adr,a0
-          bclr.b    #3,1691(a0)         enable "commit" command
+          moveq.l   #$46,d0             enable "commit (selection)"
+          bsr       men_iena
           bra       exit3
 *----------------------------------------------------GEM-SUBFUNCTIONS
           ;
-set_attr  clr.w     d0                  ** set attributes **
-          move.w    chooset,d1
-          beq.s     set_att1+4           filling requested?
-          vdi       24 0 1 !frmuster+20  ;fill pattern
+set_attr  move.w    frmuster+6,d0       ** set attributes **
+          vdi       23 0 1 !d0           ;fill pattern type (0..4)
+          vdi       24 0 1 !frmuster+20  ;fill pattern style (range depends on type)
           vdi       25 0 1 !frmuster+34  ;fill color
-set_att1  move.w    frmuster+6,d0
-          vdi       23 0 1 !d0           ;fill style
           vdi       104 0 1 !chooset+4   ;border on/off
 set_att2  ;
           vdi       15 0 1 !frlinie+34   ;line style
@@ -1403,15 +1407,20 @@ tool_rts  rts
           ;
 *-----------------------------------------------------------------DATA
 win_xy    ds.w   7
+*---------------------------------------------------------------------
+          ;                             --- Selection state ---
+          ;                             0 = flag 0=no selection; -1: ongoing
+          ;                             2 = x1/y1 of upper-left corner (rel. to bild_adr)
+          ;                             6 = x2/y2 of lower-right corner (rel. to bild_adr)
 mark_buf  ds.w   5
-data_buf  ds.w   4
+*---------------------------------------------------------------------
+data_buf  ds.w   4                      ; scratch buffer for drawing text
 koostr    dc.b   27,'Y h###/###',0
 koostr1   dc.b   27,'Y h       ',0
 koostr2   dc.b   27,'Y h---/---',0
 koo_buff  ds.w   4
 last_koo  ds.w   5   ; x0,y0; x1,y1; flag 0/-1
-;mfdb_q    dc.w   0000,0000,00,00,40,0,1,0,0,0
-;          dc.w   0000,0000,00,00,40,0,1,0,0,0
+*---------------------------------------------------------------------
 stralvie  dc.b   '[3][Polygon completed?][Ok|Continue]',0
 stralmax  dc.b   '[3][Maximum is 128 corners!][Abort]',0
 *---------------------------------------------------------------------

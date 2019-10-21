@@ -96,10 +96,10 @@ pinsel    cmp.b     #4,frpinsel+33      *** Shape: Brush ***
           beq       pinsel7
 pinsel6   bsr       set_wrmo            -- initialization --
           bsr       clip_on
-          vdi       23 0 1 !frmuster+6
-          vdi       24 0 1 !frmuster+20
-          vdi       25 0 1 !frpinsel+20
-          vdi       104 0 1 0
+          vdi       23 0 1 !frmuster+6  ; fill style
+          vdi       24 0 1 !frmuster+20 ; fill index
+          vdi       25 0 1 !frpinsel+20 ; fill color
+          vdi       104 0 1 0           ; border off
           clr.w     d0                  calc. the offset table
           move.b    frpinsel+33,d0      get shape of the brush from config
           lsl.w     #2,d0
@@ -108,8 +108,12 @@ pinsel6   bsr       set_wrmo            -- initialization --
           move.w    frpinsel+6,d6       get size of the brush from config
           move.w    d6,d7
           muls.w    (a0)+,d6            D6: X-offset
-          muls.w    (a0),d7
-pinsel1   move.l    d3,d4               -- Loop --
+          bne.s     pinsel11
+          add.w     #1,d6
+pinsel11  muls.w    (a0),d7             D7: Y-offset
+          bne.s     pinsel1
+          add.w     #1,d7
+pinsel1   move.l    d3,d4               -- Loop while mouse button pressed --
           bsr       noch_qu
           bsr       hide_m
           move.b    maus_rec+1,d0
@@ -126,26 +130,27 @@ pinsel1   move.l    d3,d4               -- Loop --
           sub.w     d7,PTSIN+6(a6)
           add.w     d7,PTSIN+10(a6)
           add.w     d7,PTSIN+14(a6)
-          vdi       9 4 0               ;filled area
+          vdi       9 4 0               ;filled area (4 corners)
           bsr       show_m
           bra       pinsel1
+          ;
 pinsel7   move.w    frpinsel+6,d0       --- Shape "O" brush ---
           beq       pinsel6
           lsl.w     #1,d0
           addq.w    #1,d0
-          vdi       16 1 0 !d0 0
-          vdi       17 0 1 !frpinsel+20
-          vdi       108 0 2 0 2
+          vdi       16 1 0 !d0 0        ; polyline line width: brush width
+          vdi       17 0 1 !frpinsel+20 ; polyline color
+          vdi       108 0 2 0 2         ; polyline end style: round end
           bsr       set_wrmo
           bsr       clip_on
-pinsel8   move.l    d3,d4
+pinsel8   move.l    d3,d4               -- Loop while mouse button pressed --
           bsr       noch_qu
           move.b    maus_rec+1,d0
           beq.s     pinsel9
           bsr       hide_m
-          move.l    d3,PTSIN+0(a6)
+          move.l    d3,PTSIN+0(a6)      ; X1/Y1 = X2/Y2
           move.l    d4,PTSIN+4(a6)
-          vdi       6 2 0
+          vdi       6 2 0               ; polyline
           bsr       show_m
           bra       pinsel8
 pinsel9   move.l    PTSIN+0(a6),d0
@@ -314,7 +319,10 @@ kurve     bra       hide_m              *** Curve ***
           ;
 *=================================================================DATA
 punktdat  dc.b  %10010010,%11010010,%01010010,0
-pin_data  dc.w  0,1,-1,0,1,-1,1,1
+pin_data  dc.w  0,1     ; shape "|"
+          dc.w  1,0     ; shape "-"
+          dc.w  1,-1    ; shape "/"
+          dc.w  1,1     ; shape "\"  (note shape "O" handled separately)
 mode_dat  dc.b  %10010000,%11010000,%01010000,%01010000
 spr_dich  dc.w  60,76,85,90,95,96,97,98,99,103,108,111,115,120,124,128
 *---------------------------------------------------------------------

@@ -30,7 +30,7 @@
  include "f_sys.s"
  include "f_def.s"
  ;
- XREF  now_offs,evt_butt,evt_menu,fram_drw,save_buf
+ XREF  evt_butt,evt_menu,fram_drw,save_buf
  XREF  menu_adr,directory,alertbox,mark_buf,mrk,koos_mak,wind_chg
  ;
  XDEF  aescall,vdicall
@@ -39,9 +39,18 @@
  XDEF  fram_del,copy_blk,rand_tab,msg_buff
 
 **********************************************************************
+*   Module structure:
+*   - FA: main entry, registered event+window+mouse handler entry funcs,
+*         window event handling, raster-copy sub-function
+*   - FG: Shape graphics handlers: line, rectangle, ... & sub-functions
+*   - FH: ... cntd.: dot, brush, spraycan, rubberband, eraser
+*   - FM: Menu command handler: "About", file menu, Shape selection
+*   - FN: ... cntd: Attributes+Selection+Tools menus
+*   - FO: ... cntd: Selection rotate, zoom, distort
+**********************************************************************
 *   Global register mapping:
 *
-*   a4   Address of address of current window record
+*   a4   Address of address of current window record (rec_adr)
 *   a6   Base address of data section
 **********************************************************************
           ;
@@ -99,12 +108,18 @@
           ;
 *---------------------------------------------------------SETUP-------
           ;
-          aes       110 0 1 1 0 rscname ;rsrc_load
+          lea       rscname,a0
+          aes       110 0 1 1 0 !a0 ;rsrc_load
           move.w    INTOUT(a6),d0
-          beq       mainrts             Error -> abort
-          clr.w     d1
+          bne.s     getdir3
+          lea       stralrsc,a0         Error -> notify user
+          moveq.l   #1,d0
+          bsr       alertbox
+          bra       mainrts             exit
+getdir3   clr.w     d1                  Get address of menu object tree
           bsr       rsrc_gad
-          move.l    ADDROUT(a6),menu_adr
+          lea       menu_adr,a0
+          move.l    ADDROUT(a6),(a0)
           lea       directory,a2        -- initialitze Itemslct --
           move.w    #$19,-(sp)
           trap      #1                  ;current_disk
@@ -126,7 +141,8 @@ getdir2   move.b    (a0)+,(a2)+
           move.w    #3,-(sp)            ;get logical screen RAM base
           trap      #14
           addq.l    #2,sp
-          move.l    d0,logbase
+          lea       logbase,a0
+          move.l    d0,(a0)
           bsr       hide_m              ;hide_mouse
           moveq.l   #16,d1
           bsr       rsrc_gad
@@ -143,20 +159,27 @@ getdir2   move.b    (a0)+,(a2)+
           move.l    INTOUT+6(a6),INTIN+14(a6)
           aes       51 9 1 1 0 3              ;form_dial
           aes       30 1 1 1 0 1 !menu_adr    ;menu_bar
-          move.l    #maus_kno,CONTRL+14(a6)   ;replace handler for mouse button click
+          lea       maus_kno,a0               ;replace handler for mouse button click
+          move.l    a0,CONTRL+14(a6)
           vdi       125 0 0                   ;vex_butv
-          move.l    CONTRL+18(a6),maus_rec+4
-          move.l    #maus_mov,CONTRL+14(a6)   ;replace handler for mouse movement
+          lea       maus_rec,a2
+          move.l    CONTRL+18(a6),4(a2)
+          lea       maus_mov,a0               ;replace handler for mouse movement
+          move.l    a0,CONTRL+14(a6)
           vdi       127 0 0                   ;vex_curv
-          move.l    CONTRL+18(a6),maus_rec+8
+          move.l    CONTRL+18(a6),8(a2)
           aes       78 1 1 0 0 0              ;GRAF_MOUSE (arrow shape)
           bsr       show_m                    ;show_mouse
           lea       wi1,a4                    Address of first window
-          move.l    a4,rec_adr
+          lea       rec_adr,a0                assign to pointer to current window
+          move.l    a4,(a0)
+          lea       mrk,a0                    ; enable selection overlay mode by default
+          move.b    #$1,OV(a0)
 *--------------------------------------------------------EVENT-HANDLER
-evt_multi ;
-          aes       25 16 7 1 0 %110000 0 0 0 0 0 0 0 0 0 0 0 0 0 70 0 msg_buff       ;evt_multi
-          btst.b    #4,INTOUT+1(a6)
+evt_multi ;                                   ; wait for message, but max. 70ms
+          lea       msg_buff,a0
+          aes       25 16 7 1 0 %110000 0 0 0 0 0 0 0 0 0 0 0 0 0 70 0 !a0  ;evt_multi
+          btst.b    #4,INTOUT+1(a6)     message?
           bne.s     evt_mul1
           bsr       koos_mak            print mouse coords. in menu bar, if enabled
           lea       maus_rec,a2
@@ -179,7 +202,7 @@ evt_mul2  tst.b     1(a2)               menu selection -> ignore
           bne       evt_multi
           clr.w     (a2)
           bra       evt_multi
-evt_mul1  pea       evt_multi
+evt_mul1  pea       evt_multi           push handler address to stack -> "rts" returns to loop
           move.l    rec_adr,a4
           move.w    msg_buff,d0
           cmp.w     #10,d0              menu item selected?
@@ -257,7 +280,7 @@ redraw11  move.l    d0,d2
           movem.l   (sp)+,a3/d0-d2
           move.w    mark_buf,d3         redraw rectangle?
           beq.s     redraw10
-          cmp.l     rec_adr(pc),a3
+          cmp.l     rec_adr,a3
           bne.s     redraw10
           move.l    FENSTER(a3),-(sp)
           move.l    FENSTER+4(a3),-(sp)
@@ -301,7 +324,8 @@ topped4   add.w     #WIN_STRUCT_SZ,a0
           dbra      d0,topped3
           move.b    d2,LASTNUM(a4)
           bsr       fram_del
-          move.l    a4,rec_adr          store address of new active window
+          lea       rec_adr,a0
+          move.l    a4,(a0)             store address of new active window
           bsr       prep_men            set state of "Save" menu entry
 topped5   move.w    d3,d1
           moveq.l   #10,d0
@@ -538,32 +562,39 @@ closed5   move.l    FENSTER(a4),d0
           trap      #1
           addq.l    #6,sp
           clr.b     INFO(a4)
-          move.l    menu_adr,a0         disable "undo" menu entry
-          bset.b    #3,491(a0)
-          clr.w     drawflag
-          move.w    mark_buf,d0
+          moveq.l   #$14,d0             disable "undo" menu entry
+          bsr       men_idis
+          lea       drawflag,a0
+          clr.w     (a0)
+          move.w    mark_buf,d0         selection ongoing?
           bne.s     closed7
-          move.l    drawflag+12,d0
+          move.l    drawflag+12,d0      no; undo buffer refers to current window?
           cmp.l     BILD_ADR(a4),d0
           bne.s     closed8
-          clr.w     mrk+EINF            disable "paste" menu entry
-          bset.b    #3,1643(a0)
+          lea       mrk,a0              yes -> disable paste
+          clr.w     EINF(a0)
+          moveq.l   #$44,d0             disable "paste" menu entry
+          bsr       men_idis
           bra.s     closed8
-closed7   clr.b     mark_buf            delete frame
+closed7   lea       mark_buf,a0         delete selection frame
+          clr.b     (a0)
           bsr       fram_del
-closed8   move.w    #-1,(a4)
+closed8   move.w    #-1,(a4)            reset window handle
           clr.w     d2
           move.b    LASTNUM(a4),d2
-          sub.w     #1,wi_count
+          lea       wi_count,a0
+          sub.w     #1,(a0)
           ble.s     closed2
           lea       wi1-WIN_STRUCT_SZ,a4  ; loop to search previous active window
           moveq.l   #WIN_STRUCT_CNT-1,d0
 closed1   add.w     #WIN_STRUCT_SZ,a4
           cmp.w     WIN_HNDL(a4),d2     match?
           dbeq      d0,closed1
-          move.l    a4,rec_adr          -> set as current
+          lea       rec_adr,a0
+          move.l    a4,(a0)             -> set as current
           bsr       prep_men            Set state of "Save" menu entry
-          cmp.w     #6,wi_count
+          move.w    wi_count,d0
+          cmp.w     #6,d0
           blo.s     exec_rts
           move.l    menu_adr,a3         enable accessories
           add.w     #323,a3
@@ -571,15 +602,16 @@ closed1   add.w     #WIN_STRUCT_SZ,a4
 closed4   bclr.b    #3,(a3)
           add.w     #24,a3
           dbra      d0,closed4
-          rts
-closed2   move.l    menu_adr,a0         disable menu entries
-          bset.b    #3,635(a0)
-          lea       now_offs,a1
-          moveq.l   #4,d0
-closed3   add.w     (a1)+,a0
-          bset.b    #3,(a0)
-          dbra      d0,closed3
 exec_rts  rts
+          ;
+closed2   moveq.l   #$16,d0             all windows closed -> disable menu entries
+          bsr       men_idis            disble "discard"
+          moveq.l   #$19,d0             disble "save as"
+          bsr       men_idis
+          moveq.l   #$1a,d0             disable "save"
+          bsr       men_idis
+          moveq.l   #$1b,d0             disble "print"
+          bra       men_idis
           ;
 absmod    move.l    rec_adr,a4          ** Switch into absolute mode **
           move.w    WIN_HNDL(a4),d0
@@ -671,13 +703,10 @@ win_rdw   bsr       get_top             ** Redraw screen **
           ;
 prep_men  move.l    BILD_ADR(a4),a0     ** Set State of "Save" menu entry **
           add.w     #32010,a0
+          moveq.l   #$1a,d0             index of "save" menu entry
           tst.b     (a0)                window title set?
-          movea.l   menu_adr,a0
-          beq.s     prep_me1
-          bclr      #3,635(a0)          -> enable saving
-          rts
-prep_me1  bset      #3,635(a0)
-          rts
+          bne       men_iena            yes -> enable "save"
+          bra       men_idis            no -> disable "save"
           ;
 divu1000  move.l    #1000,d0
 divu_d0   cmp.l     d0,d1               ** D1 := D1 / D0 **
@@ -725,13 +754,13 @@ maus_kn5  btst      #1,d0               right mouse button?
           move.w    #-1,maus_rec+20
           bra.s     maus_kn1
 maus_kn4  clr.b     maus_rec+20
-maus_kn1  move.l    maus_rec+4,-(sp)
-          rts
+maus_kn1  move.l    maus_rec+4,-(sp)    jump to standard handler
+          rts                           ;(without modifying register content!)
           ;
 maus_mov  move.w    d0,maus_rec+12      ** Mouse movement interrupt **
           move.w    d1,maus_rec+14
-          move.l    maus_rec+8,-(sp)
-          rts
+          move.l    maus_rec+8,-(sp)    jump to standard handler
+          rts                           ;(without modifying register content!)
           ;
 save_scr  move.w    wi_count,d0         ** Release screen buffer **
           beq       exec_rts
@@ -746,9 +775,8 @@ save_sc1  lea       drawflag,a0
           lea       mrk,a0
           clr.b     OVKU(a0)            short-overlay mode cleared
           clr.b     DEL(a0)             do not delete old border
-          move.l    menu_adr,a0
-          bset.b    #3,491(a0)          disable "undo"
-          rts
+          moveq.l   #$14,d0             disable "undo" menu entry
+          bra       men_idis
           ;
 swap_buf  move.l    bildbuff,a1         ** Swap content of buffers **
           move.l    rec_adr,a0
@@ -757,7 +785,7 @@ swap_buf  move.l    bildbuff,a1         ** Swap content of buffers **
 swap_bu1  move.l    (a0),d0
           move.l    (a1),(a0)+
           move.l    d0,(a1)+
-          move.l    (a0),d0
+          move.l    (a0),d0             unrolled once
           move.l    (a1),(a0)+
           move.l    d0,(a1)+
           dbra      d1,swap_bu1
@@ -1101,7 +1129,14 @@ logbase   ds.l      1          Address of screen buffer
 bildbuff  ds.l      1          Address of general buffer
 rec_adr   ds.l      1          Address of current window's record within "wi1", or address of "wiabs" in abs.mode
 maxwin    dc.w      1,37,620,342  Window size after maximize
-drawflag  dcb.w   8,0          Flags for undo and paste
+          ;                    -- Flags for undo and paste --
+drawflag  dc.w      0          undo flag: 0:disabled -1:enabled $ff00:selection-moved
+          dc.w      0          ??
+          dc.l      0          old selection X1/Y1
+          dc.l      0          old selection X2/Y2
+          dc.l      0          #$12345678 for undo of shape draw,
+          ;                    or copy of selection buffer "BILD_ADR(a4)"
+*-----------------------------------------------------WINDOW-VARIABLES
 wi_count  dc.w      0          Number of open windows
 wi1       dc.w    -1,0,0,0,0,0,0,0,-40,-03,0,03,40,614,337,0,0,959,887
           dc.w    -1,0,0,0,0,0,0,0,-40,-11,0,11,40,606,337,0,0,947,887
@@ -1112,12 +1147,22 @@ wi1       dc.w    -1,0,0,0,0,0,0,0,-40,-03,0,03,40,614,337,0,0,959,887
           dc.w    -1,0,0,0,0,0,0,0,-40,-51,0,51,40,566,337,0,0,884,887
 wiabs     dc.w    -1,0,0,0,0,0,0,0,0,0,0,0,0,640,320,-1,-1
 *--------------------------------------------------------MOUSE-CONTROL
-maus_rec  dc.l    0     ;{ left button flags/VDI_Button_Vec/VDI_Mouse_Vec/
-          dcb.w   10,0  ;  cur_XY-pos/button-XY-pos/right button-flags }
+maus_rec  dc.l    0     ; 0= left button flags
+          dc.l    0     ; 4= old VDI Button_Vec
+          dc.l    0     ; 8= old VDI Mouse_Vec
+          dc.l    0     ; 12= current mouse pointer X/Y
+          dc.l    0     ; 16= pointer X/Y at time of button press
+          dc.w    0     ; 20= right button-flags
+          dc.w    0     ; unused
 *--------------------------------------------------------------STRINGS
-msg_buff  ds.w    10
+msg_buff  ds.w    10    ; message buffer filled by AES evnt_multi/evnt_mesag
+                        ; 0= event ID (e.g. 20=WM_REDRAW)
+                        ; 2= AES app.ID.; rest depends on event ID
+*--------------------------------------------------------------STRINGS
 rscname   dc.b    'FA.RSC',0,'FREE!!'
 picname   dc.b    '\*.PIC',0
+stralrsc  dc.b    '[3][Failed to load resource file|'
+          dc.b    '"FA.RSC"][Exit]',0             ; ATTN: keep equal with "rscname"
 straldel  dc.b    '[1][You are discarding your|'
           dc.b    'unsaved image!][Ok|Cancel]',0
 *---------------------------------------------------------------------

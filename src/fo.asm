@@ -33,7 +33,7 @@
  XREF  aescall,vdicall
  XREF  logbase,bildbuff,rec_adr,maus_rec,mark_buf,drawflag,rand_tab
  XREF  show_m,hide_m,save_buf,save_scr,win_rdw,copy_blk,alertbox
- XREF  cent_koo,form_buf,menu_adr,men_inv,mrk,over_cut,over_old
+ XREF  cent_koo,form_buf,men_inv,mrk,over_cut,over_old
  XREF  win_xy,work_blk,form_do,frrotier,frzoomen,frzerren
  XREF  work_bl2,form_del
  ;
@@ -75,8 +75,8 @@ fuenf_4c  cmp.b     #$4c,d0
           ;
           lea       drawflag,a0         enable "undo"
           move.w    #-1,(a0)
-          move.l    menu_adr,a0
-          bclr.b    #3,491(a0)
+          moveq.l   #$14,d0
+          bsr       men_iena
           lea       mrk,a0              short overlay mode
           move.w    #$ff,EINF(a0)
           move.b    #-1,DEL(a0)         clear old rect. before operation
@@ -233,8 +233,8 @@ zoom35    lea       drawflag+4,a2
           move.w    20(a4),d1
           bsr       zoom_aus            zoom rect.
           move.l    rec_adr,a4
-          move.l    menu_adr,a0         set flags
-          bclr.b    #3,491(a0)
+          moveq.l   #$14,d0             enable "undo"
+          bsr       men_iena
           lea       mrk,a0
           move.w    #$ff,EINF(a0)
           move.b    #-1,DEL(a0)
@@ -271,8 +271,8 @@ zerr1     clr.l     18(a4)
           clr.w     (a0)+
           move.l    #-1,(a0)+
           move.l    #-1,(a0)
-          move.l    menu_adr,a0
-          bclr.b    #3,491(a0)
+          moveq.l   #$14,d0             enable "undo"
+          bsr       men_iena
           lea       drawflag,a0
           move.w    #-1,(a0)
           bsr       men_inv
