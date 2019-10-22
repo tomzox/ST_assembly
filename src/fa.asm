@@ -36,7 +36,7 @@
  XDEF  aescall,vdicall
  XDEF  bildbuff,wi1,rec_adr,win_rdw,show_m,hide_m
  XDEF  save_scr,set_xx,rsrc_gad,vslidrw,wi_count,drawflag,logbase
- XDEF  fram_del,copy_blk,rand_tab,msg_buff
+ XDEF  fram_del,fram_mod,copy_blk,rand_tab,msg_buff
 
 **********************************************************************
 *   Module structure:
@@ -824,6 +824,13 @@ fram_de2  clr.w     SEL_STATE(a6)       no
           lea       msg_buff+6,a0
           move.w    (sp)+,(a0)
           movem.l   (sp)+,a1-a4/d2-d7
+          rts
+          ;
+fram_mod  move.l    BILD_ADR(a0),d0     ** Selection content modified **
+          lea       drawflag+4,a0
+          move.l    SEL_FRM_X1Y1(a6),(a0)+
+          move.l    SEL_FRM_X2Y2(a6),(a0)+
+          move.l    d0,(a0)+
           rts
           ;
 sizedsub  move.l    d3,FENSTER+4(a4)    ** Set window size **

@@ -75,6 +75,7 @@ fuenf_4c  cmp.b     #$4c,d0
           ;
           lea       drawflag,a0         enable "undo"
           move.w    #-1,(a0)
+          bsr       fram_mod
           moveq.l   #$14,d0
           bsr       men_iena
           lea       mrk,a0              short overlay mode

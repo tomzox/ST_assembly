@@ -264,6 +264,7 @@ white1    bsr       save_scr
           move.l    BILD_ADR(a4),a0
           bsr       work_blk            execute raster operation
           move.w    #$ff00,drawflag
+          bsr       fram_mod
           moveq.l   #$14,d0
           bsr       men_iena
           bsr       men_inv
@@ -579,6 +580,7 @@ spihor4   lea       80(a2),a0
           dbra      d7,spihor1
           lea       drawflag,a0         enable "undo"
           move.w    #$ff00,(a0)
+          bsr       fram_mod
           moveq.l   #$14,d0
           bsr       men_iena
           bsr       men_inv
@@ -707,6 +709,7 @@ spiver12  move.l    SEL_FRM_X1Y1(a6),d2    + shift +
           bsr       copy_blk
 spiver10  lea       drawflag,a0         enable "undo"
           move.w    #$ff00,(a0)
+          bsr       fram_mod
           moveq.l   #$14,d0
           bsr       men_iena
           bsr       men_inv
