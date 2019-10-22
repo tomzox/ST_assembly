@@ -34,7 +34,7 @@
  XREF  menu_adr,directory,alertbox,mark_buf,mrk,koos_mak,wind_chg
  ;
  XDEF  aescall,vdicall
- XDEF  bildbuff,wi1,rec_adr,maus_rec,win_rdw,show_m,hide_m
+ XDEF  bildbuff,wi1,rec_adr,win_rdw,show_m,hide_m
  XDEF  save_scr,set_xx,rsrc_gad,vslidrw,wi_count,drawflag,logbase
  XDEF  fram_del,copy_blk,rand_tab,msg_buff
 
@@ -162,12 +162,11 @@ getdir2   move.b    (a0)+,(a2)+
           lea       maus_kno,a0               ;replace handler for mouse button click
           move.l    a0,CONTRL+14(a6)
           vdi       125 0 0                   ;vex_butv
-          lea       maus_rec,a2
-          move.l    CONTRL+18(a6),4(a2)
+          move.l    CONTRL+18(a6),MOUSE_VEC_BUT(a6)
           lea       maus_mov,a0               ;replace handler for mouse movement
           move.l    a0,CONTRL+14(a6)
           vdi       127 0 0                   ;vex_curv
-          move.l    CONTRL+18(a6),8(a2)
+          move.l    CONTRL+18(a6),MOUSE_VEC_MOV(a6)
           aes       78 1 1 0 0 0              ;GRAF_MOUSE (arrow shape)
           bsr       show_m                    ;show_mouse
           lea       wi1,a4                    Address of first window
@@ -182,25 +181,24 @@ evt_multi ;                                   ; wait for message, but max. 70ms
           btst.b    #4,INTOUT+1(a6)     message?
           bne.s     evt_mul1
           bsr       koos_mak            print mouse coords. in menu bar, if enabled
-          lea       maus_rec,a2
-          tst.w     20(a2)              right mouse button?
+          tst.w     MOUSE_RBUT(a6)      right mouse button?
           bne       absmod
-          tst.w     (a2)                left mouse button?
+          tst.w     MOUSE_LBUT(a6)      left mouse button?
           beq       evt_multi
-          tst.w     2(a2)               during menu selection?
+          tst.w     MOUSE_LBUT+2(a6)    during menu selection?
           bne.s     evt_mul2
           move.l    rec_adr,a4
           aes       104 2 5 0 0 !(a4) 10  ;wind_get
           move.w    INTOUT+2(a6),d0
           cmp.w     WIN_HNDL(a4),d0
           beq.s     evt_mul3            is accessory window active?
-          move.w    #-1,2(a2)
+          move.w    #-1,MOUSE_LBUT+2(a6)
           bra.s     evt_mul2
 evt_mul3  pea       evt_multi
           bra       evt_butt
-evt_mul2  tst.b     1(a2)               menu selection -> ignore
+evt_mul2  tst.b     MOUSE_LBUT+1(a6)    menu selection -> ignore
           bne       evt_multi
-          clr.w     (a2)
+          clr.w     MOUSE_LBUT(a6)
           bra       evt_multi
 evt_mul1  pea       evt_multi           push handler address to stack -> "rts" returns to loop
           move.l    rec_adr,a4
@@ -613,7 +611,7 @@ closed2   moveq.l   #$16,d0             all windows closed -> disable menu entri
           moveq.l   #$1b,d0             disble "print"
           bra       men_idis
           ;
-absmod    move.l    rec_adr,a4          ** Switch into absolute mode **
+absmod    move.l    rec_adr,a4          ** Switch into full-screen mode **
           move.w    WIN_HNDL(a4),d0
           bmi       evt_multi
           bsr       swap_buf
@@ -633,20 +631,18 @@ absmod    move.l    rec_adr,a4          ** Switch into absolute mode **
           move.l    bildbuff,BILD_ADR(a4)
           lea       bildbuff,a1
           move.l    a0,(a1)
-          lea       maus_rec+20,a0
-absmod2   tst.b     (a0)
+absmod2   tst.b     MOUSE_RBUT(a6)      busy loop until right mouse button is released
           bne       absmod2
-          clr.w     (a0)
-absmod3   move.w    maus_rec+20,d0      +++ loop +++
+          clr.w     MOUSE_RBUT(a6)
+absmod3   move.w    MOUSE_RBUT(a6),d0   +++ loop +++
           bne.s     absmod4
-          move.w    maus_rec,d0
+          move.w    MOUSE_LBUT(a6),d0
           beq       absmod3
           move.l    rec_adr,a4
           bsr       evt_butt
-          lea       maus_rec,a0
-absmod6   tst.b     (a0)
+absmod6   tst.b     MOUSE_LBUT(a6)
           bne       absmod6
-          clr.w     (a0)
+          clr.w     MOUSE_LBUT(a6)
           bra       absmod3
           ;
 absmod4   bsr       hide_m              +++ Previous screen +++
@@ -663,10 +659,9 @@ absmod4   bsr       hide_m              +++ Previous screen +++
           lea       rec_adr,a0
           move.l    (sp)+,a4
           move.l    a4,(a0)
-          lea       maus_rec+20,a0
-absmod5   tst.b     (a0)
+absmod5   tst.b     MOUSE_RBUT(a6)
           bne.s     absmod5
-          clr.w     (a0)
+          clr.w     MOUSE_RBUT(a6)
           bsr       win_rdw
           bra       evt_multi
 *--------------------------------------------------------SUB-FUNCTIONS
@@ -720,12 +715,14 @@ mainrts   clr.w     -(sp)               ** Error -> abort program **
           trap      #1
           bra       mainrts
           ;
-maus_kno  move.w    #1,$9ef0            ** Mouse button interrupt **
-          btst      #0,d0
+maus_kno  subq.l    #4,sp               ** Mouse button interrupt **
+          movem.l   a0/a6,-(sp)
+          lea       dsect_a6,a6
+          move.w    #1,$9ef0
+          btst      #0,d0               ++ left button ++
           beq.s     maus_kn2
-          tst.w     maus_rec            button click already registered?
+          tst.w     MOUSE_LBUT(a6)      button click already registered?
           bne.s     maus_kn5            -> ignore
-          move.l    a0,-(sp)
           move.l    logbase,a0
           tst.b     $54(a0)             any menus active?
           bne.s     maus_kn3
@@ -739,28 +736,31 @@ maus_kno  move.w    #1,$9ef0            ** Mouse button interrupt **
           bne.s     maus_kn3
           tst.b     $83(a0)
           bne.s     maus_kn3
-          move.l    (sp)+,a0
-          move.l    #$1010000,maus_rec
-          move.l    maus_rec+12,maus_rec+16  save mouse coordinates
+          move.l    #$1010000,MOUSE_LBUT(a6)
+          move.l    MOUSE_CUR_XY(a6),MOUSE_ORIG_XY(a6) ;save mouse coordinates
           bra.s     maus_kn5
-maus_kn3  move.l    #$101ffff,maus_rec
-          move.l    (sp)+,a0
+maus_kn3  move.l    #$101ffff,MOUSE_LBUT(a6)      ; set flag: mouse pressed during menus
           bra.s     maus_kn5
-maus_kn2  clr.b     maus_rec+1
-maus_kn5  btst      #1,d0               right mouse button?
+maus_kn2  clr.b     MOUSE_LBUT+1(a6)
+maus_kn5  btst      #1,d0               ++ right mouse button ++
           beq.s     maus_kn4
-          tst.w     maus_rec+20
+          tst.w     MOUSE_RBUT(a6)
           bne.s     maus_kn4
-          move.w    #-1,maus_rec+20
+          move.w    #-1,MOUSE_RBUT(a6)
           bra.s     maus_kn1
-maus_kn4  clr.b     maus_rec+20
-maus_kn1  move.l    maus_rec+4,-(sp)    jump to standard handler
-          rts                           ;(without modifying register content!)
+maus_kn4  clr.b     MOUSE_RBUT(a6)
+maus_kn1  move.l    MOUSE_VEC_BUT(a6),8(sp) ;place address of standard handler on the stack
+          movem.l   (sp)+,a0/a6         restore registers
+          rts                           ;jump via RTS so that no register is needed
           ;
-maus_mov  move.w    d0,maus_rec+12      ** Mouse movement interrupt **
-          move.w    d1,maus_rec+14
-          move.l    maus_rec+8,-(sp)    jump to standard handler
-          rts                           ;(without modifying register content!)
+maus_mov  subq.l    #8,sp               ** Mouse movement interrupt **
+          move.l    a6,(sp)
+          lea       dsect_a6,a6
+          move.w    d0,MOUSE_CUR_XY+0(a6)   ;X
+          move.w    d1,MOUSE_CUR_XY+2(a6)   ;Y
+          move.l    MOUSE_VEC_MOV(a6),4(sp) ;place address of standard handler on the stack
+          move.l    (sp)+,a6            restore A6
+          rts                           ;jump via RTS so that no register is needed
           ;
 save_scr  move.w    wi_count,d0         ** Release screen buffer **
           beq       exec_rts
@@ -1146,14 +1146,6 @@ wi1       dc.w    -1,0,0,0,0,0,0,0,-40,-03,0,03,40,614,337,0,0,959,887
           dc.w    -1,0,0,0,0,0,0,0,-40,-43,0,43,40,574,337,0,0,897,887
           dc.w    -1,0,0,0,0,0,0,0,-40,-51,0,51,40,566,337,0,0,884,887
 wiabs     dc.w    -1,0,0,0,0,0,0,0,0,0,0,0,0,640,320,-1,-1
-*--------------------------------------------------------MOUSE-CONTROL
-maus_rec  dc.l    0     ; 0= left button flags
-          dc.l    0     ; 4= old VDI Button_Vec
-          dc.l    0     ; 8= old VDI Mouse_Vec
-          dc.l    0     ; 12= current mouse pointer X/Y
-          dc.l    0     ; 16= pointer X/Y at time of button press
-          dc.w    0     ; 20= right button-flags
-          dc.w    0     ; unused
 *--------------------------------------------------------------STRINGS
 msg_buff  ds.w    10    ; message buffer filled by AES evnt_multi/evnt_mesag
                         ; 0= event ID (e.g. 20=WM_REDRAW)

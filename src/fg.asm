@@ -33,7 +33,7 @@
  XREF  frmodus,frmuster,frtext,frlinie,frraster,frzeiche
  XREF  chookoo,choofig,chooset,chooras,chootxt,choopat,chooseg
  XREF  rec_adr,drawflag,mrk,logbase,bildbuff
- XREF  maus_rec,copy_blk,save_scr,fram_del,form_do,form_del
+ XREF  copy_blk,save_scr,fram_del,form_do,form_del
  XREF  hide_m,show_m,work_blk,work_bl2,alertbox,pinsel,spdose,gummi
  XREF  punkt,kurve,radier,over_old,over_que,over_beg,mfdb_q,stack
  ;
@@ -53,9 +53,9 @@ evt_butt  lea       win_xy,a0           WIN_XY: window coords.
           move.l    YX_OFF(a4),8(a0)
           clr.w     12(a0)
           bsr       win_abs
-          move.l    maus_rec+16,d0
+          move.l    MOUSE_ORIG_XY(a6),d0
           bsr       alrast              round X/Y to closest point in alrast, if enabled
-          move.l    d0,maus_rec+16
+          move.l    d0,MOUSE_ORIG_XY(a6)
           move.w    d0,d1
           swap      d0
           bsr       noch_in             click into window?
@@ -85,7 +85,7 @@ evt_but4  bsr       save_scr
           move.w    #$ff00,(a0)
           lea       last_koo,a0
           clr.w     8(a0)
-          move.l    maus_rec+16,d3      D3: mouse X/Y-pos.
+          move.l    MOUSE_ORIG_XY(a6),d3      D3: mouse X/Y-pos.
 *- - - - - - - - - - - - - - - - - - - - - - - - - - -GRAPHICS-HANDLER
           move.w    choofig,d0
           cmp.b     #$55,d0
@@ -135,13 +135,12 @@ exit3     moveq.l   #$14,d0             enable "undo" menu entry
           beq.s     exit6
           bsr       fram_drw            draw frame around selected area
 exit6     bsr       show_m
-exit7     move.b    maus_rec+1,d0       wait for mouse button to be released
+exit7     move.b    MOUSE_LBUT+1(a6),d0 ;wait for mouse button to be released
           bne       exit7
-          clr.w     maus_rec
+          clr.w     MOUSE_LBUT(a6)
 exit_rts  rts
           ;
-donot     lea       maus_rec,a0         mouse click unhandled
-          move.w    #-1,2(a0)
+donot     move.w    #-1,MOUSE_LBUT+2(a6)   mouse click unhandled
           rts
           ;
 *---------------------------------------------------------------------
@@ -186,7 +185,7 @@ linie2    move.l    d3,d4               D2: last end point
           beq.s     linie3
           move.l    d4,42(a3)           remove previous line
           dc.w      $a003
-linie3    move.b    maus_rec+1,d0
+linie3    move.b    MOUSE_LBUT+1(a6),d0
           beq.s     linie1
           move.l    d3,42(a3)           draw new line
           move.w    #$aaaa,34(a3)
@@ -212,7 +211,7 @@ linie4    bsr       set_att2            --- finalize line ---
           vdi       6 2 0               ;polyline
           bra       ret_attr
           ;
-vieleck   clr.w     maus_rec            *** Shape: Polygon ***
+vieleck   clr.w     MOUSE_LBUT(a6)      *** Shape: Polygon ***
           move.l    bildbuff,a2
           move.l    38(a3),(a2)+
           move.l    d4,(a2)
@@ -224,7 +223,7 @@ vieleck   clr.w     maus_rec            *** Shape: Polygon ***
           bsr       show_m
 vieleck7  moveq.l   #-1,d3              wait for first mouse movement
           bsr       vieleck3            handle RETURN and backspace keys
-          move.l    maus_rec+12,d0
+          move.l    MOUSE_CUR_XY(a6),d0
           lea       win_xy,a0
           bsr       corr_adr
           cmp.l     d6,d3
@@ -245,9 +244,9 @@ vieleck2  move.l    d3,d4               +++ Loop +++
           bsr       show_m
 vieleck4  bsr.s     vieleck3            handle RETURN and backspace keys
           moveq.l   #-1,d3
-          move.w    maus_rec,d0         mouse button?
+          move.w    MOUSE_LBUT(a6),d0      mouse button clicked?
           bne.s     vieleck5
-          move.l    maus_rec+12,d0      mouse moved?
+          move.l    MOUSE_CUR_XY(a6),d0    mouse moved?
           lea       win_xy,a0
           bsr       corr_adr
           cmp.l     d3,d4
@@ -261,9 +260,9 @@ vieleck5  bsr       hide_m              +++ mouse click +++
           move.l    d7,a2
           move.l    d4,(a2)
           move.l    d4,d6
-vieleck6  move.b    maus_rec+1,d0
+vieleck6  move.b    MOUSE_LBUT+1(a6),d0
           bne       vieleck6
-          clr.w     maus_rec
+          clr.w     MOUSE_LBUT(a6)
           bsr       show_m
           move.l    d7,d0               more than 128 corners?
           sub.l     bildbuff,d0
@@ -395,7 +394,7 @@ quadrat1  bsr       noch_qu
           tst.w     d4
           beq.s     quadrat5
           bsr       quadr_dr
-quadrat5  move.b    maus_rec+1,d0
+quadrat5  move.b    MOUSE_LBUT+1(a6),d0
           beq.s     quadrat2
           move.w    d3,d5               D5: Y-new
           move.l    d3,d4               D4: X-new
@@ -445,12 +444,12 @@ quadrat2  cmp.w     #$43,choofig        --- finalize square ---
           vdi       6 5 0 !d6 !d7 !d4 !d7 !d4 !d5 !d6 !d5 !d6 !d7
           vdi       108 0 2 0 0
           bra.s     quadrat9
-quadrat6  move.w    #1,CONTRL+10(a6)           ;bar
+quadrat6  move.w    #1,CONTRL+10(a6)    ;bar
           bra.s     quadrat8
-quadrat7  move.w    #8,CONTRL+10(a6)           ;rounded_rec
+quadrat7  move.w    #8,CONTRL+10(a6)    ;rounded_rec
           move.w    chooset,d0
           beq.s     quadrat8
-          move.w    #9,CONTRL+10(a6)           ;filled_rounded_rec
+          move.w    #9,CONTRL+10(a6)    ;filled_rounded_rec
 quadrat8  ;
           vdi       11 2 0 !d6 !d7 !d4 !d5
 quadrat9  lea       last_koo,a0         store coords.
@@ -564,7 +563,7 @@ kreis1    bsr       noch_qu             ---- Loop ----
           tst.w     d6
           bmi.s     kreis2
           bsr       kreis_k
-kreis2    move.b    maus_rec+1,d0
+kreis2    move.b    MOUSE_LBUT+1(a6),d0
           beq.s     kreis3
           move.w    d3,d7               D7: Y-offset
           sub.w     d5,d7
@@ -645,11 +644,11 @@ text      bsr       new_1koo            *** Shape: Text ***
           move.l    d3,(a2)             store mouse X/Y-pos
           bsr       text_att            configure attributes
           lea       stack,a3
-text3     move.b    maus_rec+1,d0       wait for button release
+text3     move.b    MOUSE_LBUT+1(a6),d0   busy loop until mouse button is released
           bne       text3
-          clr.w     maus_rec
+          clr.w     MOUSE_LBUT(a6)
 text1     bsr       show_m              +++ Loop +++
-text11    move.b    maus_rec,d0
+text11    move.b    MOUSE_LBUT(a6),d0
           bne       text4
           move.w    #$b,-(sp)           ;constat
           trap      #1
@@ -787,9 +786,9 @@ text16    bsr       form_do
           bsr       copy_blk
           movem.l   (sp)+,a2-a4/d2
           bsr       text_att
-text6     move.b    maus_rec+1,d0
+text6     move.b    MOUSE_LBUT+1(a6),d0
           bne       text6
-          clr.w     maus_rec
+          clr.w     MOUSE_LBUT(a6)
           lea       stack,a1
           move.l    a1,VDIPB+4(a6)      (!) temporarily use larger buffer for INTIN
           cmp.w     #-1,d2              UNDO-key?
@@ -887,7 +886,7 @@ schub7    move.l    d2,24(a3)           24: source coord.
           sub.l     YX_OFF+2(a0),d0
           sub.w     YX_OFF(a0),d1
           sub.l     YX_OFF+2(a0),d1
-          move.l    maus_rec+16,(a3)    0: prev. mouse coords.
+          move.l    MOUSE_ORIG_XY(a6),(a3)    0: prev. mouse coords.
           move.l    d0,4(a3)            4: cur selection frame coords.
           bsr       lim_win
           lea       mark_buf+2,a1       cur frame (rel)
@@ -924,7 +923,7 @@ schub2    lea       stack,a3            +++ Loop +++
           move.l    (a3),d3
           bsr       noch_qu
           bsr       hide_m
-          move.b    maus_rec+1,d0       done?
+          move.b    MOUSE_LBUT+1(a6),d0  ;done?
           beq.s     schub3
 schub8    move.l    d3,-(sp)            ++ Restore ++
           spl.b     12(a3)
@@ -1057,9 +1056,9 @@ return    ;
           rts
 *--------------------------------------------------------SUBFUNCTIONS
 noch_qu   lea       win_xy,a0           ** Query mouse **
-noch_qu5  move.b    maus_rec+1,d0
+noch_qu5  move.b    MOUSE_LBUT+1(a6),d0
           beq.s     noch_rts
-          move.l    maus_rec+12,d0
+          move.l    MOUSE_CUR_XY(a6),d0
 corr_adr  bsr       alrast
           swap      d0                  position within window?
           cmp.w     (a0),d0
@@ -1320,8 +1319,8 @@ koos_mak  move.w    chookoo,d0          ** Display mouse position **
           sub.l     #$10001,d2
           move.l    d1,(a0)
           move.l    d2,4(a0)
-          move.w    maus_rec+12,d0
-          move.w    maus_rec+14,d1
+          move.w    MOUSE_CUR_XY(a6),d0
+          move.w    MOUSE_CUR_XY+2(a6),d1
           bsr       noch_in
           bne.s     koos_ou2
           move.l    YX_OFF(a1),win_xy+8

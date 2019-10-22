@@ -31,7 +31,7 @@
  include "f_def.s"
  ;
  XREF  aescall,vdicall
- XREF  msg_buff,bildbuff,rec_adr,maus_rec,mark_buf,drawflag
+ XREF  msg_buff,bildbuff,rec_adr,mark_buf,drawflag
  XREF  show_m,hide_m,save_scr,win_rdw,rsrc_gad,set_xx,drei_chg
  XREF  save_buf,win_abs,choofig,copy_blk,win_xy,koos_mak,alertbox
  XREF  rand_tab,logbase,get_koos,over_que,fram_del,fuenf_4c,koostr1
@@ -149,9 +149,9 @@ attrib30  cmp.b     #4,d4
           bne.s     attrib34
           moveq.l   #4,d0               -- User-defined pattern --
           bsr       obj_off
-          move.w    maus_rec+12,d0
+          move.w    MOUSE_CUR_XY(a6),d0
           sub.w     INTOUT+2(a6),d0
-          move.w    maus_rec+14,d1      D0/1: XY-offset of pattern pixel clicked by user
+          move.w    MOUSE_CUR_XY+2(a6),d1      D0/1: XY-offset of pattern pixel clicked by user
           sub.w     INTOUT+4(a6),d1
           lsr.w     #3,d0               bit pos.
           lsr.w     #3,d1
@@ -165,7 +165,7 @@ attrib30  cmp.b     #4,d4
 attrib33  lea       choofil,a0          flip bit within the pattern
           bchg      d3,(a0,d2.w)
           bsr       hide_m
-          move.l    maus_rec+12,d0
+          move.l    MOUSE_CUR_XY(a6),d0
           sub.l     INTOUT+2(a6),d0
           and.l     #$780078,d0
           add.l     INTOUT+2(a6),d0
@@ -199,7 +199,7 @@ attrib20  cmp.w     #20,2(a2)           -- Linie attribute dialog --
           bne.s     attrib21
           moveq.l   #7,d0               line pattern definition
           bsr       obj_off
-          move.w    maus_rec+12,d0
+          move.w    MOUSE_CUR_XY(a6),d0
           sub.w     INTOUT+2(a6),d0
           lsr.w     #3,d0
           move.l    180(a3),a0
@@ -215,9 +215,9 @@ attrib21  bsr       form_lin            line pattern demo
 attrib23  moveq.l   #-1,d1              wait for release of mouse button
           move.l    a0,a0
           move.l    a0,a0
-          move.b    maus_rec+1,d0
+          move.b    MOUSE_LBUT+1(a6),d0
           dbeq      d1,attrib23+2
-          clr.w     maus_rec
+          clr.w     MOUSE_LBUT(a6)
           pea       attrib13
           bra       form_do2            back to dialog handler
           ;

@@ -31,9 +31,9 @@
  include "f_def.s"
  ;
  XREF  frradier,frmodus,frpinsel,frmuster,new_1koo,new_2koo,vdicall
- XREF  maus_rec,hide_m,show_m,noch_qu,return,set_wrmo,win_xy,logbase
+ XREF  hide_m,show_m,noch_qu,return,set_wrmo,win_xy,logbase
  XREF  bildbuff,frsprayd,frlinie,frpunkt,noch_qu,clip_on
- XREF  set_attr,set_att2,ret_attr,ret_att2,maus_rec,chooset,sinus
+ XREF  set_attr,set_att2,ret_attr,ret_att2,chooset,sinus
  ;
  XDEF  punkt,pinsel,spdose,radier,gummi,kurve
           ;
@@ -75,7 +75,7 @@ punkt4    bsr       show_m
           bsr       noch_qu
           bsr       hide_m
           move.l    last_koo+4,d0
-          move.b    maus_rec+1,d1
+          move.b    MOUSE_LBUT+1(a6),d1
           bne       punkt1              -> another dot to draw
           bra       ret_attr
           ;
@@ -94,7 +94,7 @@ punkt3    bsr       hide_m              -- Loop while mouse button pressed --
           vdi       7 1 0               ;polymarker
           bsr       show_m
           bsr       noch_qu
-          move.b    maus_rec+1,d0
+          move.b    MOUSE_LBUT+1(a6),d0
           bne       punkt3              loop to next marker
           bsr       hide_m
           bra       return
@@ -123,7 +123,7 @@ pinsel11  muls.w    (a0),d7             D7: Y-offset
 pinsel1   move.l    d3,d4               -- Loop while mouse button pressed --
           bsr       noch_qu
           bsr       hide_m
-          move.b    maus_rec+1,d0
+          move.b    MOUSE_LBUT+1(a6),d0
           beq       ret_att2            -> done
           move.l    d3,PTSIN+0(a6)
           move.l    d4,PTSIN+4(a6)
@@ -152,7 +152,7 @@ pinsel7   move.w    frpinsel+6,d0       --- Shape "O" brush ---
           bsr       clip_on
 pinsel8   move.l    d3,d4               -- Loop while mouse button pressed --
           bsr       noch_qu
-          move.b    maus_rec+1,d0
+          move.b    MOUSE_LBUT+1(a6),d0
           beq.s     pinsel9
           bsr       hide_m
           move.l    d3,PTSIN+0(a6)      ; X1/Y1 = X2/Y2
@@ -257,8 +257,8 @@ spdose5   sub.l     a0,a0               calc pixel-addresse
           bne.s     spdose6
 spdose8   add.l     logbase,a0
 spdose7   bset.b    d4,(a0)
-spdose6   move.l    maus_rec+12,d3
-          move.b    maus_rec+1,d0
+spdose6   move.l    MOUSE_CUR_XY(a6),d3
+          move.b    MOUSE_LBUT+1(a6),d0
           bne       spdose1
           rts
           ;
@@ -272,7 +272,7 @@ gummi     bsr       set_att2            *** Shape: Rubberband ***
 gummi1    bsr       show_m
           bsr       noch_qu
           bsr       hide_m
-          move.b    maus_rec+1,d0
+          move.b    MOUSE_LBUT+1(a6),d0
           beq       ret_attr
           move.l    d7,PTSIN+0(a6)
           move.l    d3,PTSIN+4(a6)
@@ -317,7 +317,7 @@ radier1   bsr       hide_m              ++ loop ++
           vdi       11 2 0              ;bar
           bsr       show_m
           bsr       noch_qu
-          move.b    maus_rec+1,d0
+          move.b    MOUSE_LBUT+1(a6),d0
           bne       radier1             -> continue loop
           bsr       hide_m
           bra       ret_att2

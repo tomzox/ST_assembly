@@ -26,21 +26,32 @@
  ifnd __F_DEF_S
 __F_DEF_S equ 1
 
-          ;        *** Offsets to data section (A6) ***
+;----------------- *** Offsets to data section (A6) *** ----------------------
           ;        *** Interface to AES/VDI (aescall, vdicall) ***
-GRHANDLE  equ    0   ; ds.w
-APPL_ID   equ    2   ; ds.w
-AESPB     equ    4   ; contrl,global,intin,intout,addrin,addrout
-VDIPB     equ    28  ; contrl,intin,ptsin,intout,ptsout
-CONTRL    equ    48  ; ds.w 11
-GLOBAL    equ    70  ; ds.w 20
-INTIN     equ   110  ; ds.w 20
-PTSIN     equ   150  ; ds.w 10
-INTOUT    equ   170  ; ds.w 50
-PTSOUT    equ   270  ; ds.w 20
-ADDRIN    equ   310  ; ds.l 3
-ADDROUT   equ   322  ; ds.l 3
-DSECT_SZ  equ   334
+GRHANDLE       equ   0   ; ds.w
+APPL_ID        equ   2   ; ds.w
+AESPB          equ   4   ; contrl,global,intin,intout,addrin,addrout
+VDIPB          equ   28  ; contrl,intin,ptsin,intout,ptsout
+CONTRL         equ   48  ; ds.w 11
+GLOBAL         equ   70  ; ds.w 20
+INTIN          equ  110  ; ds.w 20
+PTSIN          equ  150  ; ds.w 10
+INTOUT         equ  170  ; ds.w 50
+PTSOUT         equ  270  ; ds.w 20
+ADDRIN         equ  310  ; ds.l 3
+ADDROUT        equ  322  ; ds.l 3
+
+          ;        *** State of the mouse pointer & buttons ***
+MOUSE_LBUT     equ  334  ; dc.l ; left button flags (0-1:pressed?; 1:also special!?; 2-3:in menu or outside window)
+MOUSE_VEC_BUT  equ  338  ; dc.l ; old VDI Button_Vec
+MOUSE_VEC_MOV  equ  342  ; dc.l ; old VDI Mouse_Vec
+MOUSE_CUR_XY   equ  346  ; dc.l ; current mouse pointer X/Y
+MOUSE_ORIG_XY  equ  350  ; dc.l ; pointer X/Y at time of button press
+MOUSE_RBUT     equ  354  ; dc.w ; right button-flags
+;              equ  356  ; dc.w ; unused
+          ;
+DSECT_SZ  equ   358      ; total size of data section managed via A6
+;-----------------------------------------------------------------------------
           ;
           ;        *** Offsets within window struct ("wi1") ***
 WIN_HNDL  equ  0    ; window handle or -1 if window not open

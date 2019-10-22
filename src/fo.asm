@@ -31,7 +31,7 @@
  include "f_def.s"
  ;
  XREF  aescall,vdicall
- XREF  logbase,bildbuff,rec_adr,maus_rec,mark_buf,drawflag,rand_tab
+ XREF  logbase,bildbuff,rec_adr,mark_buf,drawflag,rand_tab
  XREF  show_m,hide_m,save_buf,save_scr,win_rdw,copy_blk,alertbox
  XREF  cent_koo,form_buf,men_inv,mrk,over_cut,over_old
  XREF  win_xy,work_blk,form_do,frrotier,frzoomen,frzerren
@@ -156,8 +156,8 @@ zoom1     bsr       manu_mak
           sub.w     drawflag+4,d2
           move.w    drawflag+10,d3
           sub.w     drawflag+6,d3
-          move.w    maus_rec+12,d4
-          move.w    maus_rec+14,d5
+          move.w    MOUSE_CUR_XY(a6),d4
+          move.w    MOUSE_CUR_XY+2(a6),d5
           move.l    frzoomen+60,d6
           and.l     #$f000f,d6
           cmp.l     #10000,d6           Preserve aspect ratio?
@@ -444,16 +444,14 @@ manu_pr1  clr.l     (a0)+
           bsr       copy_blk
           lea       stack,a4            A4: address of data record
           move.l    #$80008000,18(a4)
-          lea       maus_rec,a0
-          clr.w     20(a0)
+          clr.w     MOUSE_RBUT(a6)
           rts
           ;
 manu_mak  bsr       show_m              ** wait loop **
-          lea       maus_rec,a0
-          clr.w     (a0)
-manu_ma1  tst.b     21(a0)              done?
+          clr.w     MOUSE_LBUT(a6)
+manu_ma1  tst.b     MOUSE_LBUT+1(a6)    done?
           bne.s     manu_rts
-          tst.b     1(a0)               wait for a mouse click
+          tst.b     MOUSE_LBUT+1(a6)    wait for a mouse click
           beq       manu_ma1
           bsr       hide_m
           move.w    #1999,d0
@@ -543,7 +541,7 @@ zerr12    dbra      d7,zerr13           + end loop within row +
           dbra      d7,zerr14
           rts
           ;
-zerr_p1   move.w    maus_rec+12,d4      ## Slanting ##
+zerr_p1   move.w    MOUSE_CUR_XY(a6),d4      ## Slanting ##
           move.w    d4,d0
           move.w    drawflag+8,d1       new X-pos
           sub.w     drawflag+4,d1

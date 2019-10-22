@@ -32,7 +32,7 @@
  ;
  XREF  aescall,vdicall,stack
  XREF  msg_buff,bildbuff,wi1,wi_count,rec_adr,menu_adr,nr_vier,win_xy
- XREF  last_koo,maus_rec,rsrc_gad,save_scr,set_xx,win_rdw,form_wrt,mrk
+ XREF  last_koo,rsrc_gad,save_scr,set_xx,win_rdw,form_wrt,mrk
  XREF  drawflag,fram_del,mark_buf,form_do,form_del,men_inv,form_buf
  XREF  frinfobo,frsegmen,frkoordi,frdrucke,frdatei,check_xx,koanztab
  XREF  init_ted,copy_blk,maus_neu,fram_ins,maus_bne
@@ -81,9 +81,9 @@ mainrts3  moveq.l   #1,d0               yes -> ask for confirmation
           cmp.w     #1,d0               abort unless confirmed
           bne       men_inv
 mainrts1  ;
-          move.l    maus_rec+4,CONTRL+14(a6)
+          move.l    MOUSE_VEC_BUT(a6),CONTRL+14(a6)
           vdi       125 0 0             ;old button-vector
-          move.l    maus_rec+8,CONTRL+14(a6)
+          move.l    MOUSE_VEC_MOV(a6),CONTRL+14(a6)
           vdi       127 0 0             ;old mouse-vector
           aes       111 0 1 0 0         ;rsrc_free
           vdi       101 0 0             ;close_vwork
