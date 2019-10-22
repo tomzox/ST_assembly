@@ -33,7 +33,7 @@
  XREF  aescall,vdicall,stack
  XREF  msg_buff,bildbuff,wi1,wi_count,rec_adr,menu_adr,nr_vier,win_xy
  XREF  last_koo,rsrc_gad,save_scr,set_xx,win_rdw,form_wrt,mrk
- XREF  drawflag,fram_del,mark_buf,form_do,form_del,men_inv,form_buf
+ XREF  drawflag,fram_del,form_do,form_del,men_inv,form_buf
  XREF  frinfobo,frsegmen,frkoordi,frdrucke,frdatei,check_xx,koanztab
  XREF  init_ted,copy_blk,maus_neu,fram_ins,maus_bne
  ;
@@ -113,8 +113,7 @@ new1      bsr       fram_del
           bsr       men_idis
           lea       mrk,a0
           clr.w     EINF(a0)
-new4      lea       mark_buf,a0
-          clr.w     (a0)
+new4      clr.w     SEL_STATE(a6)
           move.b    #1,INFO(a4)         only open-flag set
           clr.w     (a1)
           move.w    #3999,d0
@@ -190,7 +189,8 @@ open6     clr.l     (a0)+
           clr.l     (a0)+
           clr.l     (a0)+
           dbra      d0,open6
-          move.l    a4,rec_adr
+          lea       rec_adr,a0
+          move.l    a4,(a0)
           moveq.l   #$16,d0             enable "discard"
           bsr       men_iena
           moveq.l   #$19,d0             enable "save as"
@@ -244,17 +244,19 @@ zwei_18   cmp.b     #$18,d0
           bne       zwei_14
           bsr       over_que            --- Command: Load ---
           bne       men_inv
-          clr.b     filename
+          lea       filename,a0
+          clr.b     (a0)
           clr.w     d3
           bsr       itemslct            open item selector
           tst.b     d0
           bne       men_inv
-          clr.w     -(sp)               open
+          clr.w     -(sp)               open: mode:read-only
           pea       dta+30
           move.w    #$3d,-(sp)
           trap      #1
           addq.l    #8,sp
-          move.w    d0,handle
+          lea       handle,a0
+          move.w    d0,(a0)
           bmi       tos_err
           move.b    frdatei+33,d1       D1: format
           bne.s     load2               +++ Format RAW +++
@@ -297,7 +299,8 @@ load6     move.b    (a2)+,(a0)+
           bra       load3
 load2     cmp.b     #1,d1
           bne.s     load10
-          cmp.l     #32034,dta+26       +++ Format DEGAS +++
+          lea       dta+26,a0           +++ Format DEGAS +++
+          cmp.l     #32034,(a0)
           bne       load_bad
           moveq.l   #34,d2
           move.l    bildbuff,a2
@@ -374,7 +377,7 @@ load_opn  bsr       wind_chg            ++ prepare window ++
           beq.s     load_op2
           btst.b    #2,INFO(a4)         virgin?
           bne.s     load_op2
-          move.w    mark_buf,d0         selection ongoing?
+          tst.w     SEL_STATE(a6)       selection ongoing?
           beq       set_name            no -> use already open window
 load_op2  bsr       open
           tst.b     d0                  error?
@@ -394,7 +397,7 @@ zwei_14   cmp.b     #$14,d0
           btst.b    #1,INFO(a4)         single modification only so far?
           bne.s     regen8
           bchg.b    #3,INFO(a4)         yes -> reset modification flag
-regen8    move.w    mark_buf,d0
+regen8    tst.w     SEL_STATE(a6)
           beq       regen10
           lea       mrk,a2
           tst.b     OV(a2)
@@ -412,9 +415,9 @@ regen12   move.l    (a0)+,(a1)+
           lea       stack,a0            parameter
           lea       drawflag+4,a1
           move.l    (a1),d0
-          move.l    mark_buf+2,(a1)+
+          move.l    SEL_FRM_X1Y1(a6),(a1)+
           move.l    (a1),d1
-          move.l    mark_buf+6,(a1)
+          move.l    SEL_FRM_X2Y2(a6),(a1)
           move.l    d1,d2
           sub.l     d0,d2
           move.l    d0,4(a0)
@@ -436,10 +439,10 @@ regen12   move.l    (a0)+,(a1)+
           clr.l     OLD+4(a2)
           bra.s     regen14
 regen15   clr.l     OLD+4(a2)
-          move.w    mark_buf+2,d0
+          move.w    SEL_FRM_X1Y1+0(a6),d0
           bne.s     regen16
           move.w    d1,OLD+4(a2)
-regen16   move.w    mark_buf+4,d0
+regen16   move.w    SEL_FRM_X1Y1+2(a6),d0
           bne.s     regen14
           swap      d1
           move.w    d1,OLD+6(a2)
@@ -472,16 +475,15 @@ regen1    move.l    (a0),d0
           move.b    drawflag+1,d0       undo of selection movement?
           beq       regen2
           lea       drawflag,a0
-          lea       mark_buf,a1
-          move.w    #-1,(a1)+
+          move.w    #-1,SEL_STATE(a6)
           move.l    4(a0),d0
           move.l    8(a0),d1
-          move.l    (a1),4(a0)
-          move.l    4(a1),8(a0)
-          move.l    d0,(a1)
-          move.l    d1,4(a1)
+          move.l    SEL_FRM_X1Y1(a6),4(a0)
+          move.l    SEL_FRM_X2Y2(a6),8(a0)
+          move.l    d0,SEL_FRM_X1Y1(a6)
+          move.l    d1,SEL_FRM_X2Y2(a6)
           bpl.s     regen4
-          clr.w     -2(a1)              ++ clear window frame ++
+          clr.w     SEL_STATE(a6)       ++ clear window frame ++
           move.l    menu_adr,a2
           bset.b    #3,1667(a2)         disable "discard" menu entry
           cmp.l     #$12345678,12(a0)   is pasting allowed?
@@ -722,7 +724,7 @@ zwei_19   cmp.b     #$19,d0
           beq.s     save18
           cmp.b     #$1a,d0
           bne       men_inv
-save18    move.b    frdatei+33,d0       --- Command: Save ---
+save18    move.b    frdatei+33,d0       --- Command: Save/Save as ---
           bne       save3
           move.b    frdatei+35,d0       +++ Format RAW +++
           bne.s     save4
@@ -754,7 +756,8 @@ save7     move.l    d5,d2
           add.l     #$10001,d2          D2: width/height
           move.l    d2,d0
           swap      d0
-          cmp.b     #2,frdatei+33       LOGO format?
+          move.b    frdatei+33,d1       LOGO format?
+          cmp.b     #2,d1
           bne.s     save14
           and.w     #15,d0              is width a multiple of words?
           beq.s     save8
@@ -791,7 +794,8 @@ save10    lea       form_buf,a0         backup size
           move.l    a3,a1               A3: scratch buffer
           bsr       copy_blk
           bsr       maus_bne            switch mouse form to "bee"
-          cmp.b     #2,frdatei+33
+          move.b    frdatei+33,d1
+          cmp.b     #2,d1
           bne.s     save13
           lea       logo_buf,a0         LOGO format -> save header
           moveq.l   #10,d0
@@ -838,20 +842,21 @@ save_opn  move.l    BILD_ADR(a4),a0     +++ ask user for file name +++
           add.w     #32010,a0
           moveq.l   #-1,d3              D3: parameter for itemslct
           move.l    a0,a2
-save_op4  move.b    (a0)+,d0
+save_op4  move.b    (a0)+,d0            search for start of file name (i.e. after last '\' in path)
           beq.s     save_op3
           cmp.b     #'\',d0
           bne       save_op4
-          move.l    a0,a2
+          move.l    a0,a2               A2: address of last '\' +1
           bra       save_op4
 save_op3  lea       filename,a0
-save_op5  move.b    (a2)+,(a0)+
+save_op5  move.b    (a2)+,(a0)+         copy file name part of full path/name
           bne       save_op5
-save_op6  cmp.w     #$1a,msg_buff+8     "Save"?
+          lea       msg_buff+8,a0       "Save" menu command? (i.e. not "Save as...")
+          cmp.w     #$1a,(a0)
           bne.s     save_op7
           move.l    BILD_ADR(a4),a2
           add.w     #32010,a2
-          tst.b     (a2)
+          tst.b     (a2)                filename of current buffer already set?
           beq.s     save_op7
           moveq.l   #$7f,d3
           bsr       itemauto
@@ -875,7 +880,8 @@ save_o10  clr.w     -(sp)               ;create
           addq.l    #8,sp
           tst.l     d0                  error?
           bmi.s     save_op2
-          move.w    d0,handle
+          lea       handle,a0
+          move.w    d0,(a0)
           move.l    BILD_ADR(a4),a0
           add.w     #32010,a0
           tst.b     (a0)                window title already set?
@@ -1068,7 +1074,7 @@ wind_chg  btst.b    #1,INFO(a4)         ** Image modified? **
           bchg.b    #3,INFO(a4)
 wind_ch1  rts
           ;
-over_que  move.w    mark_buf,d0         ** Ask for confirmation "Commit selection?" **
+over_que  tst.w     SEL_STATE(a6)       ** Ask for confirmation "Commit selection?" **
           beq.s     over_qrts
           move.b    mrk+OV,d0
           beq.s     over_qrts
@@ -1090,7 +1096,8 @@ alertbox  ;
           rts
           ;
 itemslct  lea       directory,a2        ** Item-Selector **
-          aes       90 0 2 2 0 !a2 filename
+          lea       filename,a0
+          aes       90 0 2 2 0 !a2 !a0
           cmp.w     #1,INTOUT+2(a6)
           bne.s     itemserr
 itemauto  cmp.b     #':',1(a2)
@@ -1270,7 +1277,7 @@ stralovq  dc.b   '[1][You are about to commit the|'
           dc.b   'background'
           dc.b   '][Ok|Cancel]',0
 *------------------------------------------------------------------I/O
-dta       ds.w   25
+dta       ds.w   25             ; GEMDOS-internal buffer for directory searches (struct DTA, size 22*2 bytes)
 logo_buf  ds.w   5
 handle    ds.w   1              ; temporary used during load & store
 escfeed   dc.b   27,65,8,0

@@ -27,7 +27,7 @@
 __F_DEF_S equ 1
 
 ;----------------- *** Offsets to data section (A6) *** ----------------------
-          ;        *** Interface to AES/VDI (aescall, vdicall) ***
+               ;        *** Interface to AES/VDI (aescall, vdicall) ***
 GRHANDLE       equ   0   ; ds.w
 APPL_ID        equ   2   ; ds.w
 AESPB          equ   4   ; contrl,global,intin,intout,addrin,addrout
@@ -40,8 +40,8 @@ INTOUT         equ  170  ; ds.w 50
 PTSOUT         equ  270  ; ds.w 20
 ADDRIN         equ  310  ; ds.l 3
 ADDROUT        equ  322  ; ds.l 3
-
-          ;        *** State of the mouse pointer & buttons ***
+               ;
+               ;        *** State of the mouse pointer & buttons ***
 MOUSE_LBUT     equ  334  ; dc.l ; left button flags (0-1:pressed?; 1:also special!?; 2-3:in menu or outside window)
 MOUSE_VEC_BUT  equ  338  ; dc.l ; old VDI Button_Vec
 MOUSE_VEC_MOV  equ  342  ; dc.l ; old VDI Mouse_Vec
@@ -49,8 +49,14 @@ MOUSE_CUR_XY   equ  346  ; dc.l ; current mouse pointer X/Y
 MOUSE_ORIG_XY  equ  350  ; dc.l ; pointer X/Y at time of button press
 MOUSE_RBUT     equ  354  ; dc.w ; right button-flags
 ;              equ  356  ; dc.w ; unused
-          ;
-DSECT_SZ  equ   358      ; total size of data section managed via A6
+               ;
+               ;        *** State of the selection frame ***
+SEL_STATE      equ  358  ; dc.w ; flag 0:no selection; -1:ongoing selection;
+               ;                       $00ff:temporary for sub fram_del
+SEL_FRM_X1Y1   equ  360  ; dc.l ; X/Y of upper-left corner (rel. to bild_adr)
+SEL_FRM_X2Y2   equ  364  ; dc.l ; X/Y of lower-right corner (rel. to bild_adr)
+               ;
+DSECT_SZ       equ  368  ; total size of data section managed via A6
 ;-----------------------------------------------------------------------------
           ;
           ;        *** Offsets within window struct ("wi1") ***
@@ -60,6 +66,7 @@ INFO      equ  6    ; 0:open/1:change/2:virgin/3:was already changed
 LASTNUM   equ  7    ; Handle of last active window
 LASTWIN   equ  8    ; Size before maximizing window
 YX_OFF    equ  16   ; Delta of window root to coord. root (X/Y=0/0)
+;         equ  20   ; unused
 FENSTER   equ  22   ; Position and size
 SCHIEBER  equ  30   ; Slider hor./vert.: position and size
 WIN_STRUCT_SZ equ 38 ; size of this data struct

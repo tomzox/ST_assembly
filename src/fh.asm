@@ -75,7 +75,7 @@ punkt4    bsr       show_m
           bsr       noch_qu
           bsr       hide_m
           move.l    last_koo+4,d0
-          move.b    MOUSE_LBUT+1(a6),d1
+          tst.b     MOUSE_LBUT+1(a6)
           bne       punkt1              -> another dot to draw
           bra       ret_attr
           ;
@@ -94,12 +94,13 @@ punkt3    bsr       hide_m              -- Loop while mouse button pressed --
           vdi       7 1 0               ;polymarker
           bsr       show_m
           bsr       noch_qu
-          move.b    MOUSE_LBUT+1(a6),d0
+          tst.b     MOUSE_LBUT+1(a6)
           bne       punkt3              loop to next marker
           bsr       hide_m
           bra       return
           ;
-pinsel    cmp.b     #4,frpinsel+33      *** Shape: Brush ***
+pinsel    move.b    frpinsel+33,d0      *** Shape: Brush ***
+          cmp.b     #4,d0
           beq       pinsel7
 pinsel6   bsr       set_wrmo            -- initialization --
           bsr       clip_on
@@ -123,7 +124,7 @@ pinsel11  muls.w    (a0),d7             D7: Y-offset
 pinsel1   move.l    d3,d4               -- Loop while mouse button pressed --
           bsr       noch_qu
           bsr       hide_m
-          move.b    MOUSE_LBUT+1(a6),d0
+          tst.b     MOUSE_LBUT+1(a6)
           beq       ret_att2            -> done
           move.l    d3,PTSIN+0(a6)
           move.l    d4,PTSIN+4(a6)
@@ -152,7 +153,7 @@ pinsel7   move.w    frpinsel+6,d0       --- Shape "O" brush ---
           bsr       clip_on
 pinsel8   move.l    d3,d4               -- Loop while mouse button pressed --
           bsr       noch_qu
-          move.b    MOUSE_LBUT+1(a6),d0
+          tst.b     MOUSE_LBUT+1(a6)
           beq.s     pinsel9
           bsr       hide_m
           move.l    d3,PTSIN+0(a6)      ; X1/Y1 = X2/Y2
@@ -174,8 +175,10 @@ spdose    bsr       hide_m              *** Shape: Spraycan ***
           moveq.l   #1,d7
           clr.w     d0
           move.b    frsprayd+19,d0      get spray mode from config
-          lea       mode_dat,a0
-          move.b    (a0,d0.w),spdose7+1
+          move.w    d0,d1
+          lsl.w     #1,d1
+          lea       spdosex,a0
+          move.w    (a0,d1.w),spdose7-spdosex(a0)
           cmp.b     #3,d0               INV-Modus ?
           blo.s     spdose9
           move.l    bildbuff,a0
@@ -249,7 +252,8 @@ spdose5   sub.l     a0,a0               calc pixel-addresse
           and.w     #7,d4
           neg.w     d4
           add.w     #7,d4
-          cmp.b     #3,frsprayd+19      INV mode?
+          move.b    frsprayd+19,d0      INV mode?
+          cmp.b     #3,d0
           blo.s     spdose8
           move.l    bildbuff,a1
           add.l     a0,a1
@@ -258,9 +262,13 @@ spdose5   sub.l     a0,a0               calc pixel-addresse
 spdose8   add.l     logbase,a0
 spdose7   bset.b    d4,(a0)
 spdose6   move.l    MOUSE_CUR_XY(a6),d3
-          move.b    MOUSE_LBUT+1(a6),d0
+          tst.b     MOUSE_LBUT+1(a6)
           bne       spdose1
           rts
+spdosex   bclr.b    d4,(a0)             op-code table for different spray modes
+          bset.b    d4,(a0)
+          bchg.b    d4,(a0)
+          bchg.b    d4,(a0)
           ;
 gummi     bsr       set_att2            *** Shape: Rubberband ***
           move.l    d3,d7
@@ -272,7 +280,7 @@ gummi     bsr       set_att2            *** Shape: Rubberband ***
 gummi1    bsr       show_m
           bsr       noch_qu
           bsr       hide_m
-          move.b    MOUSE_LBUT+1(a6),d0
+          tst.b     MOUSE_LBUT+1(a6)
           beq       ret_attr
           move.l    d7,PTSIN+0(a6)
           move.l    d3,PTSIN+4(a6)
@@ -317,7 +325,7 @@ radier1   bsr       hide_m              ++ loop ++
           vdi       11 2 0              ;bar
           bsr       show_m
           bsr       noch_qu
-          move.b    MOUSE_LBUT+1(a6),d0
+          tst.b     MOUSE_LBUT+1(a6)
           bne       radier1             -> continue loop
           bsr       hide_m
           bra       ret_att2
@@ -329,7 +337,6 @@ pin_data  dc.w  0,1     ; shape "|"
           dc.w  1,0     ; shape "-"
           dc.w  1,-1    ; shape "/"
           dc.w  1,1     ; shape "\"  (note shape "O" handled separately)
-mode_dat  dc.b  %10010000,%11010000,%01010000,%01010000
 spr_dich  dc.w  60,76,85,90,95,96,97,98,99,103,108,111,115,120,124,128
 *---------------------------------------------------------------------
           end

@@ -31,7 +31,7 @@
  include "f_def.s"
  ;
  XREF  evt_butt,evt_menu,fram_drw,save_buf
- XREF  menu_adr,directory,alertbox,mark_buf,mrk,koos_mak,wind_chg
+ XREF  menu_adr,directory,alertbox,mrk,koos_mak,wind_chg
  ;
  XDEF  aescall,vdicall
  XDEF  bildbuff,wi1,rec_adr,win_rdw,show_m,hide_m
@@ -276,7 +276,7 @@ redraw11  move.l    d0,d2
           movem.l   a3/d0-d2,-(sp)
           bsr       copy_blk
           movem.l   (sp)+,a3/d0-d2
-          move.w    mark_buf,d3         redraw rectangle?
+          tst.w     SEL_STATE(a6)       redraw rectangle?
           beq.s     redraw10
           cmp.l     rec_adr,a3
           bne.s     redraw10
@@ -388,10 +388,10 @@ vslidrw2  add.l     YX_OFF+2(a0),d0
           move.l    BILD_ADR(a0),a0
           move.l    logbase,a1
           bsr       copy_blk
-          move.w    mark_buf,d0
-          beq       show_m
+          tst.w     SEL_STATE(a6)
+          beq.s     vslidrw3
           bsr       fram_drw
-          bra       show_m
+vslidrw3  bra       show_m
           ;
 arrowed   cmp.w     #24,d0
           bne       sized
@@ -564,7 +564,7 @@ closed5   move.l    FENSTER(a4),d0
           bsr       men_idis
           lea       drawflag,a0
           clr.w     (a0)
-          move.w    mark_buf,d0         selection ongoing?
+          tst.w     SEL_STATE(a6)       selection ongoing?
           bne.s     closed7
           move.l    drawflag+12,d0      no; undo buffer refers to current window?
           cmp.l     BILD_ADR(a4),d0
@@ -574,8 +574,7 @@ closed5   move.l    FENSTER(a4),d0
           moveq.l   #$44,d0             disable "paste" menu entry
           bsr       men_idis
           bra.s     closed8
-closed7   lea       mark_buf,a0         delete selection frame
-          clr.b     (a0)
+closed7   clr.b     SEL_STATE(a6)       delete selection frame (SEL_STATE:=$00ff intentional)
           bsr       fram_del
 closed8   move.w    #-1,(a4)            reset window handle
           clr.w     d2
@@ -634,9 +633,9 @@ absmod    move.l    rec_adr,a4          ** Switch into full-screen mode **
 absmod2   tst.b     MOUSE_RBUT(a6)      busy loop until right mouse button is released
           bne       absmod2
           clr.w     MOUSE_RBUT(a6)
-absmod3   move.w    MOUSE_RBUT(a6),d0   +++ loop +++
+absmod3   tst.w     MOUSE_RBUT(a6)      +++ loop +++
           bne.s     absmod4
-          move.w    MOUSE_LBUT(a6),d0
+          tst.w     MOUSE_LBUT(a6)
           beq       absmod3
           move.l    rec_adr,a4
           bsr       evt_butt
@@ -791,7 +790,7 @@ swap_bu1  move.l    (a0),d0
           dbra      d1,swap_bu1
           rts
           ;
-fram_del  move.w    mark_buf,d0         ** Stop selection **
+fram_del  tst.w     SEL_STATE(a6)       ** Stop selection **
           beq       exec_rts
           move.l    menu_adr,a0
           bclr.b    #3,1643(a0)         enable "paste"
@@ -803,29 +802,27 @@ fram_de1  bset.b    #3,(a0)             disable menu entries
           move.l    rec_adr,a0          store old frame coord.
           move.l    BILD_ADR(a0),d0
           lea       drawflag+4,a0
-          move.l    mark_buf+2,(a0)+
-          move.l    mark_buf+6,(a0)+
+          move.l    SEL_FRM_X1Y1(a6),(a0)+
+          move.l    SEL_FRM_X2Y2(a6),(a0)+
           move.l    d0,(a0)+
           lea       mrk+EINF,a0         set flag "old frame exists"
           move.w    #$ff00,(a0)
-          lea       mark_buf,a0
-          move.b    (a0),d0             is frame drawn?
+          tst.b     SEL_STATE(a6)       is frame drawn?
           beq.s     fram_de3
           movem.l   a1-a4/d2-d7,-(sp)
           bsr       get_top             toplevel window up-to-date?
           bne.s     fram_de2
           bsr       fram_drw            yes -> delete frame
           movem.l   (sp)+,a1-a4/d2-d7
-fram_de3  lea       mark_buf,a0
-          clr.w     (a0)
-          move.l    #-1,6(a0)           (for "undo")
+fram_de3  clr.w     SEL_STATE(a6)
+          move.l    #-1,SEL_FRM_X2Y2(a6)  ;(for "undo")
           rts
-fram_de2  lea       mark_buf,a0         no
-          clr.w     (a0)
-          move.l    #-1,6(a0)
+fram_de2  clr.w     SEL_STATE(a6)       no
+          move.l    #-1,SEL_FRM_X2Y2(a6)
           move.w    msg_buff+6,-(sp)
           bsr       win_rdw             -> redraw image
-          move.w    (sp)+,msg_buff+6
+          lea       msg_buff+6,a0
+          move.w    (sp)+,(a0)
           movem.l   (sp)+,a1-a4/d2-d7
           rts
           ;
@@ -1029,9 +1026,10 @@ initl1    moveq.l   #16,d1
           bclr      #8,d6
           bra.s     links
           ;
-rechts    move.w    d6,ror1           ********  Right  ********
-          move.w    d6,ror2
-          move.w    d6,ror3             Patch rotation instructions into code
+rechts    lea       rechts,a4
+          move.w    d6,ror1-rechts(a4)  ********  Right  ********
+          move.w    d6,ror2-rechts(a4)
+          move.w    d6,ror3-rechts(a4)  Patch rotation instructions into code
 nxt_lin1  move.w    (a0)+,d0            +++ left border +++
 ror1      nop                           ATTN: self-modified code
           move.w    d0,d2
@@ -1071,12 +1069,13 @@ test1     cmp.w     #-1,d6
           beq       rand1
           bra       ende1
           ;
-links     move.w    d6,rol1           ********  Left  ********
-          move.w    d6,rol2
-          move.w    d6,rol3             Patch rotation instructions into code
-          move.w    d6,rol4
+links     lea       links,a4
+          move.w    d6,rol1-links(a4)   ********  Left  ********
+          move.w    d6,rol2-links(a4)
+          move.w    d6,rol3-links(a4)   Patch rotation instructions into code
+          move.w    d6,rol4-links(a4)
 nxt_lin2  move.w    2(a0),d0            +++ right border +++
-rol4      nop
+rol4      nop                           ATTN: self-modified code
           and.w     d4,d0
           move.w    d0,d1
           move.w    (a0),d0

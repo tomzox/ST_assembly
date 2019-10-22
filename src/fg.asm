@@ -37,7 +37,7 @@
  XREF  hide_m,show_m,work_blk,work_bl2,alertbox,pinsel,spdose,gummi
  XREF  punkt,kurve,radier,over_old,over_que,over_beg,mfdb_q,stack
  ;
- XDEF  evt_butt,mark_buf
+ XDEF  evt_butt
  XDEF  win_xy,fram_drw,save_buf,win_abs,noch_qu,return,set_wrmo
  XDEF  koos_mak,clip_on,new_1koo,new_2koo,set_att2,ret_att2
  XDEF  ret_attr,set_attr,fram_ins,last_koo
@@ -60,14 +60,15 @@ evt_butt  lea       win_xy,a0           WIN_XY: window coords.
           swap      d0
           bsr       noch_in             click into window?
           bne       donot               no -> abort
-          cmp.w     #$43,choofig        ++ Selection tool active? ++
+          move.w    choofig,d2          ++ Selection tool active? ++
+          cmp.w     #$43,d2
           bne.s     evt_but5
-          move.w    mark_buf,d2         selection ongoing?
+          tst.w     SEL_STATE(a6)       selection ongoing?
           beq.s     evt_but4
-          lea       mark_buf+2,a0
-          add.w     win_xy+8,d1
+          add.w     win_xy+8,d1         click into selection area?
           add.w     win_xy+10,d0
-          bsr       noch_in             click into selection area?
+          lea       SEL_FRM_X1Y1(a6),a0
+          bsr       noch_in
           beq       schub               -> move selection
           bsr       fram_drw
           bra.s     evt_but4
@@ -131,11 +132,11 @@ exit1     move.b    drawflag,d0
           ;
 exit3     moveq.l   #$14,d0             enable "undo" menu entry
           bsr       men_iena
-          move.w    mark_buf,d0         selection ongoing?
+          tst.w     SEL_STATE(a6)       selection ongoing?
           beq.s     exit6
           bsr       fram_drw            draw frame around selected area
 exit6     bsr       show_m
-exit7     move.b    MOUSE_LBUT+1(a6),d0 ;wait for mouse button to be released
+exit7     tst.b     MOUSE_LBUT+1(a6)    wait for mouse button to be released
           bne       exit7
           clr.w     MOUSE_LBUT(a6)
 exit_rts  rts
@@ -173,28 +174,28 @@ pospe     lea       drawflag,a0         *** Save position ***
           ;
 linie     dc.w      $a000               *** Shape: Line ***
           move.l    a0,a3
-          move.l    d3,38(a3)           starting coord.
-          clr.l     d4
-          bra.s     linie2+2
-linie2    move.l    d3,d4               D2: last end point
-          bsr       noch_qu
+          move.l    d3,38(a3)           D3: starting X/Y coord.
+          moveq.l   #-1,d4              D4: ending X/Y coord., or -1 until mouse moved
+linie2    bsr       noch_qu             --- Loop while mouse button pressed ---
           bsr       hide_m
           move.w    #$aaaa,34(a3)       line pattern: gray
           move.w    #2,36(a3)           drawing mode XOR
-          tst.w     d4
-          beq.s     linie3
+          tst.l     d4
+          bmi.s     linie3
           move.l    d4,42(a3)           remove previous line
           dc.w      $a003
-linie3    move.b    MOUSE_LBUT+1(a6),d0
+linie3    tst.b     MOUSE_LBUT+1(a6)    mouse button released? -> exit loop
           beq.s     linie1
           move.l    d3,42(a3)           draw new line
           move.w    #$aaaa,34(a3)
           move.w    #2,36(a3)
           dc.w      $a003
           bsr       show_m
+          move.l    d3,d4               D4: prev. end point
           bra       linie2
-linie1    tst.w     d4                  mouse moved?
-          beq.s     linie4
+          ;
+linie1    tst.l     d4                  mouse moved at all?
+          bmi.s     linie4
           move.w    choofig,d0
           cmp.w     #$29,d0             polygon?
           beq.s     vieleck
@@ -244,7 +245,7 @@ vieleck2  move.l    d3,d4               +++ Loop +++
           bsr       show_m
 vieleck4  bsr.s     vieleck3            handle RETURN and backspace keys
           moveq.l   #-1,d3
-          move.w    MOUSE_LBUT(a6),d0      mouse button clicked?
+          tst.w     MOUSE_LBUT(a6)      mouse button clicked?
           bne.s     vieleck5
           move.l    MOUSE_CUR_XY(a6),d0    mouse moved?
           lea       win_xy,a0
@@ -260,7 +261,7 @@ vieleck5  bsr       hide_m              +++ mouse click +++
           move.l    d7,a2
           move.l    d4,(a2)
           move.l    d4,d6
-vieleck6  move.b    MOUSE_LBUT+1(a6),d0
+vieleck6  tst.b     MOUSE_LBUT+1(a6)
           bne       vieleck6
           clr.w     MOUSE_LBUT(a6)
           bsr       show_m
@@ -368,7 +369,7 @@ viele_dr  move.l    d7,a0               +++ Draw lines on screen +++
           dc.w      $a003
           rts
           ;
-fuellen   bsr       new_1koo            *** Shape: Fill ***
+fuellen   bsr       new_1koo            *** Shape: Bucket fill ***
           vdi       23 0 1 !frmuster+6  ;fill_style
           vdi       24 0 1 !frmuster+20 ;fill_index
           vdi       25 0 1 !frmuster+34 ;fill_color
@@ -394,14 +395,15 @@ quadrat1  bsr       noch_qu
           tst.w     d4
           beq.s     quadrat5
           bsr       quadr_dr
-quadrat5  move.b    MOUSE_LBUT+1(a6),d0
+quadrat5  tst.b     MOUSE_LBUT+1(a6)    mouse button still pressed?
           beq.s     quadrat2
           move.w    d3,d5               D5: Y-new
           move.l    d3,d4               D4: X-new
           swap      d4
-          cmp.b     #$28,choofig+1      square?
+          move.w    choofig,d0          square?
+          cmp.w     #$28,d0
           bne.s     quadra10
-          move.w    d4,d0
+          move.w    d4,d0               --- select. equal W/H for square ---
           move.w    d5,d1
           sub.w     d6,d0
           bpl.s     quadra11
@@ -431,7 +433,8 @@ quadra15  move.w    d7,d5
 quadra10  bsr       quadr_dr
           bsr       show_m
           bra       quadrat1
-quadrat2  cmp.w     #$43,choofig        --- finalize square ---
+quadrat2  move.w    choofig,d0          --- finalize rectangle/square ---
+          cmp.w     #$43,d0             selection?
           beq       markier
           tst.w     d4                  mouse never moved -> abort
           beq       tool_rts
@@ -480,7 +483,7 @@ quadr_dr  move.w    #2,36(a3)           ++ Draw rubberband-rectangle ++
           ;
 markier   move.b    mrk+OV,d0           *** Mark selection ***
           beq.s     markier6
-          move.w    mark_buf,d0
+          tst.w     SEL_STATE(a6)
           beq.s     markier6
           move.b    mrk+CHG,d0
           beq.s     markier6
@@ -496,8 +499,7 @@ markier6  lea       drawflag,a0         disable "undo"
           clr.w     (a0)
           tst.w     d4
           bne.s     markier4
-          lea       mark_buf,a2         --- only delete borders ---
-          clr.b     (a2)
+          clr.b     SEL_STATE(a6)       --- only delete borders ---
           bsr       fram_del
           addq.l    #4,sp
           bra       exit6
@@ -511,15 +513,14 @@ markier2  add.w     win_xy+8,d5         convert coords. to abs.
           add.w     win_xy+8,d7
           add.w     win_xy+10,d4
           add.w     win_xy+10,d6
-          lea       mark_buf,a0
-          move.w    #-1,(a0)
-          move.w    d6,2(a0)            store X1Y1 & X2Y2
-          move.w    d7,4(a0)
-          move.w    d4,6(a0)
-          move.w    d5,8(a0)
+          move.w    #-1,SEL_STATE(a6)   selection active now
+          move.w    d6,SEL_FRM_X1Y1+0(a6)  store X1Y1 & X2Y2
+          move.w    d7,SEL_FRM_X1Y1+2(a6)
+          move.w    d4,SEL_FRM_X2Y2+0(a6)
+          move.w    d5,SEL_FRM_X2Y2+2(a6)
           lea       last_koo,a1         save coords.
-          move.l    2(a0),(a1)
-          move.l    6(a0),4(a1)
+          move.l    SEL_FRM_X1Y1(a6),(a1)
+          move.l    SEL_FRM_X2Y2(a6),4(a1)
           bsr       fram_drw            draw selection border
           move.b    mrk+OV,d0           overlay mode?
           beq.s     markier7
@@ -563,7 +564,7 @@ kreis1    bsr       noch_qu             ---- Loop ----
           tst.w     d6
           bmi.s     kreis2
           bsr       kreis_k
-kreis2    move.b    MOUSE_LBUT+1(a6),d0
+kreis2    tst.b     MOUSE_LBUT+1(a6)
           beq.s     kreis3
           move.w    d3,d7               D7: Y-offset
           sub.w     d5,d7
@@ -576,7 +577,8 @@ kreis4    move.l    d3,d6               D6: X-offset
           bpl.s     kreis9
           not.w     d6
           addq.w    #1,d6
-kreis9    cmp.w     #$2a,choofig        Circle?
+kreis9    move.w    choofig,d0          Circle?
+          cmp.w     #$2a,d0
           bne.s     kreis10
           cmp.w     d6,d7               yes -> choose larger of radius values
           bls.s     kreis10
@@ -628,7 +630,8 @@ kreis7    lea       last_koo,a0
           bra       ret_attr
           ;
 kreis_k   move.l    chooseg,INTIN+0(a6)  --- circle/ellipsis rubberband ---
-          cmp.w     #$2b,choofig
+          move.w    choofig,d0
+          cmp.w     #$2b,d0
           beq.s     kreis_e
           move.w    #2,CONTRL+10(a6)
           vdi       11 4 2 !d4 !d5 0 0 0 0 !d6 0  ;arc (INTIN filled already above)
@@ -644,11 +647,11 @@ text      bsr       new_1koo            *** Shape: Text ***
           move.l    d3,(a2)             store mouse X/Y-pos
           bsr       text_att            configure attributes
           lea       stack,a3
-text3     move.b    MOUSE_LBUT+1(a6),d0   busy loop until mouse button is released
+text3     tst.b     MOUSE_LBUT+1(a6)    busy loop until mouse button is released
           bne       text3
           clr.w     MOUSE_LBUT(a6)
 text1     bsr       show_m              +++ Loop +++
-text11    move.b    MOUSE_LBUT(a6),d0
+text11    tst.b     MOUSE_LBUT(a6)
           bne       text4
           move.w    #$b,-(sp)           ;constat
           trap      #1
@@ -786,7 +789,7 @@ text16    bsr       form_do
           bsr       copy_blk
           movem.l   (sp)+,a2-a4/d2
           bsr       text_att
-text6     move.b    MOUSE_LBUT+1(a6),d0
+text6     tst.b     MOUSE_LBUT+1(a6)
           bne       text6
           clr.w     MOUSE_LBUT(a6)
           lea       stack,a1
@@ -836,7 +839,8 @@ text_att  move.w    frtext+20,d0        +++ Configure attributes +++
           vdi       106 0 1 !chootxt    ;effects
           vdi       12 1 0 0 !frtext+6  ;size
           move.w    PTSOUT+6(a6),d0
-          btst.b    #4,chootxt+1        border?
+          move.w    chootxt,d1
+          btst      #4,d1               border?
           beq.s     text_at1
           addq.w    #2,d0
 text_at1  move.w    d0,6(a2)            line height
@@ -860,8 +864,8 @@ schub     move.b    mrk+MODI,d7         *** Move selection ***
           move.l    drawflag+8,d1
           bsr       work_bl2
 schub1    lea       stack,a3            + set parameters +
-          move.l    mark_buf+2,d0
-          move.l    mark_buf+6,d1
+          move.l    SEL_FRM_X1Y1(a6),d0
+          move.l    SEL_FRM_X2Y2(a6),d1
           lea       drawflag+4,a1
           move.l    d0,(a1)+            store prev. border coords.
           move.l    d1,(a1)
@@ -889,9 +893,8 @@ schub7    move.l    d2,24(a3)           24: source coord.
           move.l    MOUSE_ORIG_XY(a6),(a3)    0: prev. mouse coords.
           move.l    d0,4(a3)            4: cur selection frame coords.
           bsr       lim_win
-          lea       mark_buf+2,a1       cur frame (rel)
-          move.l    d0,(a1)+
-          move.l    d1,(a1)
+          move.l    d0,SEL_FRM_X1Y1(a6) ;cur frame (rel)
+          move.l    d1,SEL_FRM_X2Y2(a6)
           clr.b     12(a3)              12: borders deleted?
           move.b    mrk+OV,d0
           beq.s     schub9
@@ -923,12 +926,12 @@ schub2    lea       stack,a3            +++ Loop +++
           move.l    (a3),d3
           bsr       noch_qu
           bsr       hide_m
-          move.b    MOUSE_LBUT+1(a6),d0  ;done?
+          tst.b     MOUSE_LBUT+1(a6)    done?
           beq.s     schub3
 schub8    move.l    d3,-(sp)            ++ Restore ++
           spl.b     12(a3)
-          move.l    mark_buf+2,d0
-          move.l    mark_buf+6,d1
+          move.l    SEL_FRM_X1Y1(a6),d0
+          move.l    SEL_FRM_X2Y2(a6),d1
           move.l    d0,d2
           move.l    rec_adr,a0
           add.w     YX_OFF(a0),d0
@@ -954,9 +957,9 @@ schub8    move.l    d3,-(sp)            ++ Restore ++
 schub3    move.l    rec_adr,a2          +++ End +++
           move.b    mrk+OV,d0
           bne.s     schub20
-          lea       mark_buf+2,a0       + NORM mode +
-          move.w    YX_OFF(a2),d0
+          move.w    YX_OFF(a2),d0       + NORM mode +
           move.w    YX_OFF+2(a2),d1
+          lea       SEL_FRM_X1Y1(a6),a0
           add.w     d1,(a0)+
           add.w     d0,(a0)+
           add.w     d1,(a0)+
@@ -981,8 +984,8 @@ schub26   move.l    (a0)+,(a1)+
           add.w     d0,(a1)
           move.l    BILD_ADR(a2),a1
           bsr       fram_ins
-          move.l    mark_buf+6,d0       selection cut off at window borders?
-          sub.l     mark_buf+2,d0
+          move.l    SEL_FRM_X2Y2(a6),d0   ; selection cut off at window borders?
+          sub.l     SEL_FRM_X1Y1(a6),d0
           move.l    stack+28,d1
           sub.l     stack+24,d1
           lea       mrk,a0
@@ -991,7 +994,7 @@ schub26   move.l    (a0)+,(a1)+
           sne.b     PART(a0)
           move.l    stack+24,OLD(a0)
           move.l    stack+28,OLD+4(a0)
-          move.l    mark_buf+2,OLD+8(a0)
+          move.l    SEL_FRM_X1Y1(a6),OLD+8(a0)
           move.w    stack+4,d0
           sub.w     d0,OLD+8(a0)
           move.w    stack+6,d0
@@ -1056,11 +1059,11 @@ return    ;
           rts
 *--------------------------------------------------------SUBFUNCTIONS
 noch_qu   lea       win_xy,a0           ** Query mouse **
-noch_qu5  move.b    MOUSE_LBUT+1(a6),d0
+noch_qu5  tst.b     MOUSE_LBUT+1(a6)    --- start loop ---
           beq.s     noch_rts
           move.l    MOUSE_CUR_XY(a6),d0
 corr_adr  bsr       alrast
-          swap      d0                  position within window?
+          swap      d0                  X position within window?
           cmp.w     (a0),d0
           bhs.s     noch_qu1
           move.w    (a0),d0             no -> correct
@@ -1068,7 +1071,7 @@ corr_adr  bsr       alrast
 noch_qu1  cmp.w     4(a0),d0
           bls.s     noch_qu2
           move.w    4(a0),d0
-noch_qu2  swap      d0
+noch_qu2  swap      d0                  Y position within window?
           cmp.w     2(a0),d0
           bhs.s     noch_qu3
           move.w    2(a0),d0
@@ -1076,10 +1079,11 @@ noch_qu2  swap      d0
 noch_qu3  cmp.w     6(a0),d0
           bls.s     noch_qu4
           move.w    6(a0),d0
-noch_qu4  cmp.l     d0,d3
+noch_qu4  cmp.l     d0,d3               loop until effective mouse position changed
           beq       noch_qu5
           move.l    d0,d3
-          tst.w     chookoo
+          lea       chookoo,a0
+          tst.w     (a0)
           beq.s     noch_rts
           movem.l   a1/d1-d2,-(sp)
           bsr       koos_out            display mouse coord., if enabled
@@ -1167,9 +1171,8 @@ fram_ins  lea       stack+4,a3          ** Draw selection border frame **
           swap      d1
           bsr       lim_win
           move.l    d0,d2
-          lea       mark_buf+2,a0       store new border coord.
-          move.l    d0,(a0)+
-          move.l    d1,(a0)
+          move.l    d0,SEL_FRM_X1Y1(a6) ; store new border coord.
+          move.l    d1,SEL_FRM_X2Y2(a6)
           sub.w     2(a3),d0            calc selection source addr.
           sub.w     2(a3),d1
           swap      d0
@@ -1206,14 +1209,13 @@ fram_in1  clr.w     d3                  use combination mode
           vdi       109 4 1             ;copy_raster
           rts
           ;
-fram_drw  lea       mark_buf,a0         ** frame the selection **
-          tst.w     (a0)
+fram_drw  tst.w     SEL_STATE(a6)       ** frame the selection **
           beq       tool_rts
           move.l    rec_adr,a1
-          move.w    2(a0),d4            x1y1-x2y2: border coords.
-          move.w    4(a0),d5
-          move.w    6(a0),d6
-          move.w    8(a0),d7
+          move.w    SEL_FRM_X1Y1+0(a6),d4  ; x1y1-x2y2: border coords.
+          move.w    SEL_FRM_X1Y1+2(a6),d5
+          move.w    SEL_FRM_X2Y2+0(a6),d6
+          move.w    SEL_FRM_X2Y2+2(a6),d7
           sub.w     YX_OFF(a1),d5
           sub.w     YX_OFF(a1),d7
           bmi       tool_rts
@@ -1291,7 +1293,7 @@ fram_dr7  move.w    d5,40(a3)
           move.w    #$cccc,d7
           bra.s     fram_d18
 fram_d17  move.w    #$cccc,d7
-fram_d18  sub.w     mark_buf+4,d5
+fram_d18  sub.w     SEL_FRM_X1Y1+2(a6),d5
           and.w     #3,d5
           beq.s     fram_dr1
           rol.w     d5,d7
@@ -1323,7 +1325,8 @@ koos_mak  move.w    chookoo,d0          ** Display mouse position **
           move.w    MOUSE_CUR_XY+2(a6),d1
           bsr       noch_in
           bne.s     koos_ou2
-          move.l    YX_OFF(a1),win_xy+8
+          lea       win_xy+8,a0
+          move.l    YX_OFF(a1),(a0)
           swap      d0
           move.w    d1,d0
           bsr.s     alrast              align with raster, if enabled
@@ -1368,7 +1371,8 @@ koos_ou2  lea       chookoo+2,a0        ++ address is not within window ++
           addq.l    #6,sp
           rts
           ;
-alrast    tst.w     chooras             ** align XY-coords. with raster **
+alrast    ;                             ** align XY-coords. with raster **
+          move.w    chooras,-2(sp)      FIXME no register free: copy to stack to get "Z" status flag
           beq       tool_rts
           movem.l   d2-d4,-(sp)
           swap      d0
@@ -1406,12 +1410,6 @@ tool_rts  rts
           ;
 *-----------------------------------------------------------------DATA
 win_xy    ds.w   7
-*---------------------------------------------------------------------
-          ;                             --- Selection state ---
-          ;                             0 = flag 0=no selection; -1: ongoing
-          ;                             2 = x1/y1 of upper-left corner (rel. to bild_adr)
-          ;                             6 = x2/y2 of lower-right corner (rel. to bild_adr)
-mark_buf  ds.w   5
 *---------------------------------------------------------------------
 data_buf  ds.w   4                      ; scratch buffer for drawing text
 koostr    dc.b   27,'Y h###/###',0

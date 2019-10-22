@@ -31,7 +31,7 @@
  include "f_def.s"
  ;
  XREF  aescall,vdicall
- XREF  msg_buff,bildbuff,rec_adr,mark_buf,drawflag
+ XREF  msg_buff,bildbuff,rec_adr,drawflag
  XREF  show_m,hide_m,save_scr,win_rdw,rsrc_gad,set_xx,drei_chg
  XREF  save_buf,win_abs,choofig,copy_blk,win_xy,koos_mak,alertbox
  XREF  rand_tab,logbase,get_koos,over_que,fram_del,fuenf_4c,koostr1
@@ -204,10 +204,11 @@ attrib20  cmp.w     #20,2(a2)           -- Linie attribute dialog --
           lsr.w     #3,d0
           move.l    180(a3),a0
           eor.b     #%1101,(a0,d0.w)
-          move.w    choopat,d1
+          lea       choopat,a1
+          move.w    (a1),d1
           eor.b     #15,d0
           bchg      d0,d1
-          move.w    d1,choopat
+          move.w    d1,(a1)
           moveq.l   #6,d0
           moveq.l   #1,d1
           bsr       obj_draw
@@ -215,7 +216,7 @@ attrib21  bsr       form_lin            line pattern demo
 attrib23  moveq.l   #-1,d1              wait for release of mouse button
           move.l    a0,a0
           move.l    a0,a0
-          move.b    MOUSE_LBUT+1(a6),d0
+          tst.b     MOUSE_LBUT+1(a6)
           dbeq      d1,attrib23+2
           clr.w     MOUSE_LBUT(a6)
           pea       attrib13
@@ -248,7 +249,7 @@ fuenf_48  cmp.b     #$48,d0
           blo.s     fuenf_52
           cmp.b     #$4a,d0
           bhi.s     fuenf_52
-          move.w    mark_buf,d1         --- Clear/Fill black/Invert ---
+          tst.w     SEL_STATE(a6)       --- Clear/Fill black/Invert ---
           beq       men_inv
           bsr       over_cut
           sub.b     #$48,d0
@@ -321,7 +322,7 @@ fuenf_53  cmp.b     #$53,d0
 overlay1  bsr       over_alo            ++ Enable overlay mode: alloc memory ++
           tst.w     mrk+OV              out of memory?
           beq.s     overlay3
-          move.w    mark_buf,d0         Existing selection?
+          tst.w     SEL_STATE(a6)       Existing selection?
           beq.s     overlay2
           bsr       over_beg
           moveq.l   #$45,d0             enable "discard (selection)"
@@ -340,7 +341,7 @@ overlay3  moveq.l   #1,d0               abort due to memory allocation failure
           ;
 fuenf_44  cmp.b     #$44,d0
           bne       fuenf_45
-          move.w    mark_buf,d0         --- Paste selection ---
+          tst.w     SEL_STATE(a6)       --- Paste selection ---
           bne       einfug5
           move.b    mrk+EINF,d0
           beq       men_inv
@@ -361,10 +362,9 @@ einfug2   bsr       win_abs             calc window coords.
           lea       win_xy+6,a2
           lea       YX_OFF(a4),a3
           bsr       cent_koo            center selection within the window
-          lea       mark_buf,a0         initialize selection state struct
-          move.w    #-1,(a0)+
-          move.l    d0,(a0)+
-          move.l    d1,(a0)
+          move.w    #-1,SEL_STATE(a6)   initialize selection state struct
+          move.l    d0,SEL_FRM_X1Y1(a6)
+          move.l    d1,SEL_FRM_X2Y2(a6)
           move.l    d0,d2
           move.l    drawflag+4,d0       copy selection content to the image
           move.l    drawflag+8,d1
@@ -420,7 +420,7 @@ einfug5   lea       mrk,a2              ++ OV-Mode-II ++
           ;
 fuenf_45  cmp.b     #$45,d0
           bne       fuenf_46
-          move.w    mark_buf,d0         --- Discard selection ---
+          tst.w     SEL_STATE(a6)       --- Discard selection ---
           beq       men_inv
           move.b    mrk+OV,d0
           beq       men_inv
@@ -430,8 +430,7 @@ fuenf_45  cmp.b     #$45,d0
           move.b    mrk+MODI,d0
           bne.s     werfweg3
 werfweg2  bsr       save_buf
-werfweg3  lea       mark_buf,a0
-          clr.b     (a0)
+werfweg3  clr.b     SEL_STATE(a6)
           bsr       fram_del
           lea       drawflag,a0
           move.w    #-1,(a0)
@@ -455,7 +454,7 @@ werfweg1  move.l    (a0)+,(a1)+
           ;
 fuenf_46  cmp.b     #$46,d0
           bne       fuenf_4b
-          move.w    mark_buf,d0         --- Commit selection ---
+          tst.w     SEL_STATE(a6)       --- Commit selection ---
           beq       men_exit
           lea       mrk,a2
           tst.b     OV(a2)
@@ -510,7 +509,7 @@ ueber4    lea       mrk,a0
           ;
 fuenf_4b  cmp.b     #$4b,d0
           bne       fuenf_4c
-          move.w    mark_buf,d0         --- Mirror selection ---
+          tst.w     SEL_STATE(a6)       --- Mirror selection ---
           beq       men_inv
           bsr       over_cut
           lea       stralspi,a0
@@ -524,19 +523,19 @@ fuenf_4b  cmp.b     #$4b,d0
           bsr       save_buf
           cmp.b     #1,d4
           bne       spiver
-          move.w    mark_buf+8,d7       -- mirror at horizontal line --
-          sub.w     mark_buf+4,d7
+          move.w    SEL_FRM_X2Y2+2(a6),d7    -- mirror at horizontal line --
+          sub.w     SEL_FRM_X1Y1+2(a6),d7
           beq       men_inv
           move.l    bildbuff,a0
           move.l    BILD_ADR(a4),a1
-          move.w    mark_buf+4,d0
-          mulu.w    #80,d0              address
+          move.w    SEL_FRM_X1Y1+2(a6),d0
+          mulu.w    #80,d0                   address
           add.l     d0,a0
-          move.w    mark_buf+8,d0
+          move.w    SEL_FRM_X2Y2+2(a6),d0
           mulu.w    #80,d0
           add.l     d0,a1
-          move.w    mark_buf+2,d0
-          move.w    mark_buf+6,d1
+          move.w    SEL_FRM_X1Y1+0(a6),d0
+          move.w    SEL_FRM_X2Y2+0(a6),d1
           move.w    d0,d3
           move.w    d1,d4
           and.w     #15,d0
@@ -588,18 +587,18 @@ spihor5   cmp.w     #-1,d4              is width two words?
           beq       spihor3
           bra       spihor4
           ;
-spiver    move.w    mark_buf+6,d1       -- mirror at vertical line --
-          cmp.w     mark_buf+2,d1
+spiver    move.w    SEL_FRM_X2Y2+0(a6),d1    -- mirror at vertical line --
+          cmp.w     SEL_FRM_X1Y1+0(a6),d1
           bls       men_inv
-          move.w    mark_buf+8,d7       height
-          move.w    mark_buf+4,d0
+          move.w    SEL_FRM_X2Y2+2(a6),d7    height
+          move.w    SEL_FRM_X1Y1+2(a6),d0
           sub.w     d0,d7
           move.l    bildbuff,a0
           move.l    BILD_ADR(a4),a1
           mulu.w    #80,d0              Y start offset
           add.l     d0,a0
           add.l     d0,a1
-          move.w    mark_buf+2,d0
+          move.w    SEL_FRM_X1Y1(a6),d0
           move.w    d0,d3
           move.w    d1,d4
           and.w     #15,d0
@@ -658,14 +657,14 @@ spiver7   lsr.w     #1,d0
 spiver8   lea       80(a2),a0
           lea       80(a3),a1
           dbra      d7,spiver1
-          move.w    mark_buf+2,d0       ++ correct shift ++
-          move.w    mark_buf+6,d6
+          move.w    SEL_FRM_X1Y1(a6),d0    ++ correct shift ++
+          move.w    SEL_FRM_X2Y2(a6),d6
           and.w     #15,d0
           and.w     #15,d6
           moveq.l   #15,d5              D5/D6: remaining width left/right
           sub.w     d0,d5
-          move.w    mark_buf+2,d3       D3/D4: X1-X2 coords.
-          move.w    mark_buf+6,d4
+          move.w    SEL_FRM_X1Y1(a6),d3       D3/D4: X1-X2 coords.
+          move.w    SEL_FRM_X2Y2(a6),d4
           cmp.w     d5,d6
           beq.s     spiver10            not needed -> done
           blo.s     spiver11
@@ -688,11 +687,11 @@ spiver11  sub.w     d6,d5               + to the left +
           move.w    d1,-(sp)
           move.w    d3,d0
           add.w     d5,d0
-spiver12  move.l    mark_buf+2,d2       + shift +
+spiver12  move.l    SEL_FRM_X1Y1(a6),d2    + shift +
           swap      d0
           swap      d1
-          move.w    mark_buf+4,d0
-          move.w    mark_buf+8,d1
+          move.w    SEL_FRM_X1Y1+2(a6),d0
+          move.w    SEL_FRM_X2Y2+2(a6),d1
           move.l    BILD_ADR(a4),a0
           move.l    a0,a1
           bsr       copy_blk
@@ -700,8 +699,8 @@ spiver12  move.l    mark_buf+2,d2       + shift +
           move.w    (sp)+,d0
           swap      d0
           swap      d1
-          move.w    mark_buf+4,d0
-          move.w    mark_buf+8,d1
+          move.w    SEL_FRM_X1Y1+2(a6),d0
+          move.w    SEL_FRM_X2Y2+2(a6),d1
           move.l    d0,d2
           move.l    bildbuff,a0
           move.l    BILD_ADR(a4),a1
@@ -752,7 +751,8 @@ sechs_5a  cmp.b     #$5a,d0
           bne.s     sechs_59
           move.w    chooras,d1          --- Enable/disable rastering ---
           eor.b     #1,d1
-          move.w    d1,chooras
+          lea       chooras,a0
+          move.w    d1,(a0)
           bsr       check_xx
           bra.s     men_inv
           ;
@@ -854,7 +854,7 @@ over_old  move.b    mrk+OV,d0           ** undo combination **
           beq.s     over_ol2
           move.l    mrk+OLD,d0
           move.l    mrk+OLD+4,d1
-over_ol2  move.l    mark_buf+2,d2
+over_ol2  move.l    SEL_FRM_X1Y1(a6),d2
           move.l    bildbuff,a0
           move.l    rec_adr,a1
           move.l    BILD_ADR(a1),a1
@@ -901,8 +901,8 @@ over_be1  move.l    (a0)+,(a1)+
           move.l    mrk+BUFF,a0
           clr.w     d3
           ;
-work_blk  move.l    mark_buf+2,d0       ** Execute raster copy via VDI **
-          move.l    mark_buf+6,d1
+work_blk  move.l    SEL_FRM_X1Y1(a6),d0       ** Execute raster copy via VDI **
+          move.l    SEL_FRM_X2Y2(a6),d1
 work_bl2  lea       mfdb_q,a1           address of source+target MFDB struct array
           move.l    a0,(a1)             set address of source bitmap (or 0 for screen)
           move.l    a0,20(a1)           set address of target bitmap = source
@@ -981,7 +981,8 @@ form_do   bsr       maus_alt            ** Open dialog window **
           moveq.l   #4,d1
           bsr       obj_draw            ;obj_draw
           bsr       init_ted            set addresses in TED record
-          clr.w     form_buf
+          lea       form_buf,a0
+          clr.w     (a0)
           cmp.w     #13,2(a2)
           bne.s     form_do3
           bsr       form_mud            fill pattern demo box
@@ -1076,7 +1077,8 @@ form_tk7  btst.b    #0,(a0)
           bset      d2,d1
 form_tk6  add.w     #24,a0
           dbra      d0,form_tk7
-          move.w    d1,chootxt
+          lea       chootxt,a0
+          move.w    d1,(a0)
           bra       form_rw1
           ;
 form_rdw  move.l    a2,-(sp)            --- insert defaults ---
