@@ -906,10 +906,20 @@ vdicall   move.w    GRHANDLE(a6),CONTRL+12(a6)
 **********************************************************************
           ;
 copy_blk  movem.l   a4,-(sp)           *** Bit-Block Copy Function (Raster copy) ***
+          move.l    #$2800190,d3
+          cmp.l     d0,d3               check range of source X1/Y1
+          bls       copy_blk_err
+          cmp.w     d0,d3
+          bls       copy_blk_err
+          cmp.l     d1,d3               check range of source X2/Y2
+          bls       copy_blk_err
+          cmp.w     d1,d3
+          bls       copy_blk_err
           lea       blk_data,a3
           lea       rand_tab,a4
           move.w    d1,d3
           sub.w     d0,d3
+          bcs       copy_blk_err
           move.w    d2,d7
           mulu.w    #80,d7
           add.l     d7,a1
@@ -920,6 +930,7 @@ copy_blk  movem.l   a4,-(sp)           *** Bit-Block Copy Function (Raster copy)
           swap      d1
           swap      d2
           sub.w     d0,d1
+          bcs       copy_blk_err
           add.w     d2,d1
           move.w    d0,d4
           move.w    d1,d5
@@ -1117,6 +1128,9 @@ ende2     add.l     a2,a0
 test2     cmp.w     #-1,d6
           beq       rand2
           bra       ende2
+copy_blk_err:
+          move.l    (sp)+,a4
+          rts
           ;
 *----------------------------------------------------------BITBLK-DATA
 rand_tab  dc.w      $ffff,$7fff,$3fff,$1fff,$fff,$7ff,$3ff,$1ff,$ff

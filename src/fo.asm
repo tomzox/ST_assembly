@@ -34,7 +34,7 @@
  XREF  logbase,bildbuff,rec_adr,rand_tab
  XREF  show_m,hide_m,save_buf,save_scr,win_rdw,copy_blk,alertbox
  XREF  cent_koo,form_buf,men_inv,over_cut,over_old
- XREF  win_xy,work_blk,form_do,frrotier,frzoomen,frzerren
+ XREF  work_blk,form_do,frrotier,frzoomen,frzerren
  XREF  work_bl2,form_del
  ;
  XDEF  fuenf_4c,sinus,stack
