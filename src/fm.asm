@@ -32,7 +32,7 @@
  ;
  XREF  aescall,vdicall,stack
  XREF  msg_buff,bildbuff,wi1,wi_count,rec_adr,menu_adr,nr_vier,win_xy
- XREF  last_koo,rsrc_gad,save_scr,set_xx,win_rdw,form_wrt,mrk
+ XREF  last_koo,rsrc_gad,save_scr,set_xx,win_rdw,form_wrt
  XREF  drawflag,fram_del,form_do,form_del,men_inv,form_buf
  XREF  frinfobo,frsegmen,frkoordi,frdrucke,frdatei,check_xx,koanztab
  XREF  init_ted,copy_blk,maus_neu,fram_ins,maus_bne
@@ -111,8 +111,7 @@ new1      bsr       fram_del
           bne.s     new4
           moveq.l   #$44,d0             disable "paste (selection)"
           bsr       men_idis
-          lea       mrk,a0
-          clr.w     EINF(a0)
+          clr.w     SEL_FLAG_PASTABLE(a6)
 new4      clr.w     SEL_STATE(a6)
           move.b    #1,INFO(a4)         only open-flag set
           clr.w     (a1)
@@ -135,7 +134,8 @@ zwei_17   cmp.b     #$17,d0
           pea       men_inv
 open      bsr       save_scr            +++ open a new window +++
           bsr       fram_del
-          cmp.w     #6,wi_count
+          move.w    wi_count,d0
+          cmp.w     #6,d0
           bne.s     open11
           moveq.l   #1,d0               warn when opening 7th window
           lea       stralwi7,a0
@@ -200,8 +200,9 @@ open6     clr.l     (a0)+
           moveq.l   #$1b,d0             enable "print"
           bsr       men_iena
           bsr       koo_chk             disable "Coordinates" if needed
-          add.w     #1,wi_count
-          cmp.w     #7,wi_count         7 windows open?
+          lea       wi_count,a0
+          add.w     #1,(a0)
+          cmp.w     #7,(a0)             7 windows open?
           blo.s     open7
           move.l    menu_adr,a3         yes -> disable accessories
           add.w     #323,a3
@@ -399,15 +400,14 @@ zwei_14   cmp.b     #$14,d0
           bchg.b    #3,INFO(a4)         yes -> reset modification flag
 regen8    tst.w     SEL_STATE(a6)
           beq       regen10
-          lea       mrk,a2
-          tst.b     OV(a2)
+          tst.b     SEL_OPT_OVERLAY(a6)
           beq       regen10
-          tst.b     PART(a2)            ++ OV-Mode (comb./clip) ++
+          tst.b     SEL_FLAG_CUTOFF(a6) ;++ Overlay-Mode (comb./clip) ++
           bne.s     regen11
-          move.b    MODI(a2),d0
+          tst.b     SEL_CUR_COMB(a6)
           bne       regen10
 regen11   move.w    #3999,d0            background
-          move.l    mrk+BUFF,a0
+          move.l    SEL_OV_BUF(a6),a0
           move.l    BILD_ADR(a4),a1
 regen12   move.l    (a0)+,(a1)+
           move.l    (a0)+,(a1)+
@@ -424,31 +424,31 @@ regen12   move.l    (a0)+,(a1)+
           move.l    d2,8(a0)
           move.l    d0,24(a0)
           move.l    d1,28(a0)
-          move.b    VMOD(a2),CHG(a0)
-          move.b    MODI+1(a2),VMOD(a2)
-          tst.b     PART(a2)            clipping status
+          move.b    SEL_OPT_COPY(a6),12(a0)
+          ;move.b    SEL_PREV_COMB(a6),SEL_OPT_COPY(a6)  ; FIXME does not make sense to change config, esp. without updating menu item state!
+          tst.b     SEL_FLAG_CUTOFF(a6)     ;clipping status
           beq.s     regen13
-          bset.b    #7,PART(a2)
+          bset.b    #7,SEL_FLAG_CUTOFF(a6)
           beq.s     regen15
           sub.l     d0,d1
-          move.l    mrk+OLD+4,d0
-          sub.l     mrk+OLD,d0
+          move.l    SEL_PREV_X2Y2(a6),d0
+          sub.l     SEL_PREV_X1Y1(a6),d0
           sub.l     d1,d0
           bne.s     regen15
-          bclr.b    #7,PART(a2)
-          clr.l     OLD+4(a2)
+          bclr.b    #7,SEL_FLAG_CUTOFF(a6)
+          clr.l     SEL_PREV_X2Y2(a6)
           bra.s     regen14
-regen15   clr.l     OLD+4(a2)
+regen15   clr.l     SEL_PREV_X2Y2(a6)
           move.w    SEL_FRM_X1Y1+0(a6),d0
           bne.s     regen16
-          move.w    d1,OLD+4(a2)
+          move.w    d1,SEL_PREV_X2Y2+0(a6)
 regen16   move.w    SEL_FRM_X1Y1+2(a6),d0
           bne.s     regen14
           swap      d1
-          move.w    d1,OLD+6(a2)
-regen14   move.l    OLD(a2),d0
-          move.l    OLD+4(a2),28(a0)
-          add.l     OLD+8(a2),d0
+          move.w    d1,SEL_PREV_X2Y2+2(a6)
+regen14   move.l    SEL_PREV_X1Y1(a6),d0
+          move.l    SEL_PREV_X2Y2(a6),28(a0)
+          add.l     SEL_PREV_OFFSET(a6),d0
           move.l    d0,24(a0)
 regen13   move.l    BILD_ADR(a4),a1
           move.l    bildbuff,20(a0)
@@ -456,8 +456,7 @@ regen13   move.l    BILD_ADR(a4),a1
           clr.l     (a0)+
           move.l    #$27f018f,(a0)
           bsr       fram_ins            insert/commit selection
-          lea       mrk,a0
-          move.b    stack+12,VMOD(a0)
+          move.b    stack+12,SEL_OPT_COPY(a6)
           move.l    rec_adr,a4
           bsr       men_inv
           bra       win_rdw
@@ -489,7 +488,7 @@ regen1    move.l    (a0),d0
           cmp.l     #$12345678,12(a0)   is pasting allowed?
           beq.s     regen7
           move.l    BILD_ADR(a4),12(a0) yes
-          move.w    #$ff00,mrk+EINF
+          move.w    #$ff00,SEL_FLAG_PASTABLE(a6)
           moveq.l   #$44,d0             enable "paste (selection)" menu entry
           bsr       men_iena
 regen7    moveq.l   #7,d2
@@ -500,7 +499,7 @@ regen3    move.l    d2,d0
           bra.s     regen2
 regen4    move.l    menu_adr,a0         ++ Generated frame ++
           bset.b    #3,1643(a0)
-          move.b    mrk+OV,d0
+          move.b    SEL_OPT_OVERLAY(a6),d0
           beq.s     regen6
           bclr.b    #3,1643(a0)
           bclr.b    #3,1667(a0)         Enable "discard" menu entry
@@ -1076,9 +1075,9 @@ wind_ch1  rts
           ;
 over_que  tst.w     SEL_STATE(a6)       ** Ask for confirmation "Commit selection?" **
           beq.s     over_qrts
-          move.b    mrk+OV,d0
+          tst.b     SEL_OPT_OVERLAY(a6)
           beq.s     over_qrts
-          move.b    mrk+CHG,d0
+          tst.b     SEL_FLAG_CHG(a6)
           beq.s     over_qrts
           moveq.l   #1,d0
           lea       stralovq,a0
@@ -1237,9 +1236,6 @@ chootab   dc.b   %0000                  allow none
           dc.b   %1010                  polygon: fill+border (but not rounded)
           dc.b   %1011                  circle etc: allow fill+border+arc
 *--------------------------------------------------------------STRINGS
-nulstr    dc.b   0,0
-directory ds.w   35
-filename  dcb.w  7,0
 stralneu  dc.b   '[1][Please confirm discarding|'
           dc.b   'your work!'
           dc.b   '][Ok|Cancel]',0
@@ -1277,6 +1273,9 @@ stralovq  dc.b   '[1][You are about to commit the|'
           dc.b   'background'
           dc.b   '][Ok|Cancel]',0
 *------------------------------------------------------------------I/O
+nulstr    dc.b   0,0
+directory ds.w   35
+filename  dcb.w  7,0
 dta       ds.w   25             ; GEMDOS-internal buffer for directory searches (struct DTA, size 22*2 bytes)
 logo_buf  ds.w   5
 handle    ds.w   1              ; temporary used during load & store

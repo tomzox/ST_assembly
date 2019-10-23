@@ -32,7 +32,7 @@
  ;
  XREF  frmodus,frmuster,frtext,frlinie,frraster,frzeiche
  XREF  chookoo,choofig,chooset,chooras,chootxt,choopat,chooseg
- XREF  rec_adr,drawflag,mrk,logbase,bildbuff
+ XREF  rec_adr,drawflag,logbase,bildbuff
  XREF  copy_blk,save_scr,fram_del,form_do,form_del
  XREF  hide_m,show_m,work_blk,work_bl2,alertbox,pinsel,spdose,gummi
  XREF  punkt,kurve,radier,over_old,over_que,over_beg,mfdb_q,stack
@@ -75,10 +75,9 @@ evt_butt  lea       win_xy,a0           WIN_XY: window coords.
 evt_but5  move.l    drawflag+12,d0      ++ regular tool ++
           cmp.l     BILD_ADR(a4),d0
           bne.s     evt_but4
-          lea       mrk,a0              disable "paste" flag
-          tst.w     EINF(a0)
+          tst.w     SEL_FLAG_PASTABLE(a6)   ;disable "paste" flag
           beq.s     evt_but4
-          clr.w     EINF(a0)
+          clr.w     SEL_FLAG_PASTABLE(a6)
           moveq.l   #$44,d0             disable "paste (selection)" menu entry
           bsr       men_idis
 evt_but4  bsr       save_scr
@@ -481,11 +480,11 @@ quadr_dr  move.w    #2,36(a3)           ++ Draw rubberband-rectangle ++
           dc.w      $a003               x2y1-x2y2
           rts
           ;
-markier   move.b    mrk+OV,d0           *** Mark selection ***
+markier   move.b    SEL_OPT_OVERLAY(a6),d0   *** Start new selection ***
           beq.s     markier6
-          tst.w     SEL_STATE(a6)
+          tst.w     SEL_STATE(a6)       previous selection frame still active=
           beq.s     markier6
-          move.b    mrk+CHG,d0
+          tst.b     SEL_FLAG_CHG(a6)    selection content modified?
           beq.s     markier6
           bsr       show_m
           bsr       over_que            ask to confirm "commit selection?"
@@ -522,12 +521,12 @@ markier2  add.w     win_xy+8,d5         convert coords. to abs.
           move.l    SEL_FRM_X1Y1(a6),(a1)
           move.l    SEL_FRM_X2Y2(a6),4(a1)
           bsr       fram_drw            draw selection border
-          move.b    mrk+OV,d0           overlay mode?
+          move.b    SEL_OPT_OVERLAY(a6),d0           overlay mode?
           beq.s     markier7
           bsr       over_beg
           moveq.l   #$45,d0             enable "discard (selection)" menu entry
           bsr       men_iena
-          move.b    mrk+COPY,d0         copy mode enabled?
+          tst.b     SEL_OPT_COPY(a6)    copy mode enabled?
           bne.s     markier5
           moveq.l   #$44,d0             enable "paste (selection)" menu entry
           bsr       men_iena
@@ -539,12 +538,12 @@ markier3  move.l    d2,d0
           add.l     #$48,d0
           bsr       men_iena
           dbra      d2,markier3
-          lea       mrk,a0
-          clr.b     EINF(a0)            no paste
-          clr.b     OVKU(a0)
-          clr.w     MODI(a0)            no combination mode
-          clr.b     CHG(a0)             unmodified
-          clr.b     PART(a0)            no cut-off
+          clr.b     SEL_FLAG_PASTABLE(a6)  ;no paste
+          clr.b     SEL_TMP_OVERLAY(a6)
+          clr.b     SEL_CUR_COMB(a6)    no combination mode
+          clr.b     SEL_PREV_COMB(a6)
+          clr.b     SEL_FLAG_CHG(a6)    unmodified
+          clr.b     SEL_FLAG_CUTOFF(a6) no cut-off
           rts
           ;
 kreis     bsr       clip_on             *** Shape: Circle/Arc & Ellipsis ***
@@ -848,16 +847,15 @@ text_at1  move.w    d0,6(a2)            line height
           bsr       set_wrmo
           bra       clip_on
           ;
-schub     move.b    mrk+MODI,d7         *** Move selection ***
+schub     move.b    SEL_CUR_COMB(a6),d7  ;*** Move selection ***
           bsr       over_old
-          lea       mrk,a2
-          move.b    d7,MODI(a2)
-          move.l    COPY(a2),d2
+          move.b    d7,SEL_CUR_COMB(a6)
+          move.l    SEL_OPT_COPY(a6),d2
           bsr       save_scr
-          move.l    d2,COPY(a2)
-          tst.b     DEL(a2)             delete old selection?
+          move.l    d2,SEL_OPT_COPY(a6)
+          tst.b     SEL_FLAG_DEL(a6)             delete old selection?
           beq.s     schub1
-          clr.b     DEL(a2)
+          clr.b     SEL_FLAG_DEL(a6)
           clr.w     d3
           move.l    bildbuff,a0
           move.l    drawflag+4,d0
@@ -871,15 +869,15 @@ schub1    lea       stack,a3            + set parameters +
           move.l    d1,(a1)
           move.l    d0,d2
           move.l    d1,d3
-          move.b    mrk+PART,d4         restore cut-off?
+          tst.b     SEL_FLAG_CUTOFF(a6) restore cut-off?
           bpl.s     schub7
-          move.b    mrk+OV,d4
+          move.b    SEL_OPT_OVERLAY(a6),d4
           beq.s     schub7
-          move.l    mrk+OLD,d2
-          move.l    mrk+OLD+4,d3
-          sub.w     mrk+OLD+10,d0
+          move.l    SEL_PREV_X1Y1(a6),d2
+          move.l    SEL_PREV_X2Y2(a6),d3
+          sub.w     SEL_PREV_OFFSET+2(a6),d0
           swap      d0
-          sub.w     mrk+OLD+8,d0
+          sub.w     SEL_PREV_OFFSET+0(a6),d0
           swap      d0
 schub7    move.l    d2,24(a3)           24: source coord.
           move.l    d3,28(a3)
@@ -896,28 +894,28 @@ schub7    move.l    d2,24(a3)           24: source coord.
           move.l    d0,SEL_FRM_X1Y1(a6) ;cur frame (rel)
           move.l    d1,SEL_FRM_X2Y2(a6)
           clr.b     12(a3)              12: borders deleted?
-          move.b    mrk+OV,d0
+          move.b    SEL_OPT_OVERLAY(a6),d0
           beq.s     schub9
-          move.b    mrk+PART,d0         + OV-mode +
+          tst.b     SEL_FLAG_CUTOFF(a6) + Overlay mode +
           bmi.s     schub5
           bsr       save_buf
-schub5    move.l    mrk+BUFF,16(a3)     16: background source address
+schub5    move.l    SEL_OV_BUF(a6),16(a3)   16: background source address
           move.l    bildbuff,20(a3)     20: selection image source
           bra.s     schub4
 schub9    move.l    bildbuff,16(a3)     + NORM-Mode +
           move.l    BILD_ADR(a4),20(a3)
-          move.b    mrk+OVKU,d0         Kurz-Overlay-Mode?
+          tst.b     SEL_TMP_OVERLAY(a6) overlay mode temporaily enabled?
           bne.s     schub4              -> keep old background
           bsr       save_buf
-          move.b    mrk+COPY,d0         copy mode?
+          tst.b     SEL_OPT_COPY(a6)    copy mode?
           bne.s     schub4
           clr.w     d3
           move.l    bildbuff,a0
           move.l    drawflag+4,d0
           move.l    drawflag+8,d1
           bsr       work_bl2
-schub4    move.b    mrk+VMOD,d0         + new combination mode? +
-          cmp.b     mrk+MODI,d0
+schub4    move.b    SEL_OPT_COMB(a6),d0    + changed combination mode? +
+          cmp.b     SEL_CUR_COMB(a6),d0
           beq.s     schub2
           move.l    stack,d3            -> draw immediately
           bsr       hide_m
@@ -955,7 +953,7 @@ schub8    move.l    d3,-(sp)            ++ Restore ++
           bsr       show_m
           bra       schub2
 schub3    move.l    rec_adr,a2          +++ End +++
-          move.b    mrk+OV,d0
+          move.b    SEL_OPT_OVERLAY(a6),d0
           bne.s     schub20
           move.w    YX_OFF(a2),d0       + NORM mode +
           move.w    YX_OFF+2(a2),d1
@@ -964,10 +962,10 @@ schub3    move.l    rec_adr,a2          +++ End +++
           add.w     d0,(a0)+
           add.w     d1,(a0)+
           add.w     d0,(a0)
-          clr.b     mrk+PART
+          clr.b     SEL_FLAG_CUTOFF(a6)
           bra       schub21
-schub20   move.w    #1999,d3            + OV mode +
-          move.l    mrk+BUFF,a0
+schub20   move.w    #1999,d3            + Overlay mode +
+          move.l    SEL_OV_BUF(a6),a0
           move.l    BILD_ADR(a2),a1
 schub26   move.l    (a0)+,(a1)+
           move.l    (a0)+,(a1)+
@@ -988,35 +986,34 @@ schub26   move.l    (a0)+,(a1)+
           sub.l     SEL_FRM_X1Y1(a6),d0
           move.l    stack+28,d1
           sub.l     stack+24,d1
-          lea       mrk,a0
           cmp.l     d0,d1
           beq.s     schub22
-          sne.b     PART(a0)
-          move.l    stack+24,OLD(a0)
-          move.l    stack+28,OLD+4(a0)
-          move.l    SEL_FRM_X1Y1(a6),OLD+8(a0)
+          st.b      SEL_FLAG_CUTOFF(a6)   ; set partial flag
+          move.l    stack+24,SEL_PREV_X1Y1(a6)
+          move.l    stack+28,SEL_PREV_X2Y2(a6)
+          move.l    SEL_FRM_X1Y1(a6),SEL_PREV_OFFSET(a6)
           move.w    stack+4,d0
-          sub.w     d0,OLD+8(a0)
+          sub.w     d0,SEL_PREV_OFFSET+0(a6)
           move.w    stack+6,d0
-          sub.w     d0,OLD+10(a0)
+          sub.w     d0,SEL_PREV_OFFSET+2(a6)
           moveq.l   #$46,d0             enable "commit (selection)"
           bsr       men_iena
           bra.s     schub21
-schub22   move.l    stack+24,OLD(a0)
-          bclr.b    #7,PART(a0)
+schub22   move.l    stack+24,SEL_PREV_X1Y1(a6)
+          bclr.b    #7,SEL_FLAG_CUTOFF(a6)
           bne.s     schub21
-          clr.b     PART(a0)
+          clr.b     SEL_FLAG_CUTOFF(a6)
           moveq.l   #$46,d0             disable "commit (selection)"
           bsr       men_idis
-schub21   lea       mrk,a0              + set flags +
-          clr.w     EINF(a0)            pasting done
+schub21   ;                             + set flags +
+          clr.w     SEL_FLAG_PASTABLE(a6)   pasting done
           move.b    stack+12,d0
           beq       exit6
           lea       drawflag,a1         enable undo
           move.w    #-1,(a1)
-          tst.b     OV(a0)
+          tst.b     SEL_OPT_OVERLAY(a6)
           beq       exit_beg
-          move.b    VMOD(a0),MODI(a0)   store V-Mode
+          move.b    SEL_OPT_COMB(a6),SEL_CUR_COMB(a6)  store combination mode
           beq       exit3
           moveq.l   #$46,d0             enable "commit (selection)"
           bsr       men_iena
@@ -1183,12 +1180,12 @@ fram_ins  lea       stack+4,a3          ** Draw selection border frame **
           swap      d1
           add.l     20(a3),d0
           add.l     20(a3),d1
-          move.b    mrk+VMOD,d3         just move?
+          tst.b     SEL_OPT_COMB(a6)    just move?
           bne.s     fram_in1
           move.l    stack+20,a0         1:1-copy
           bra       copy_blk
 fram_in1  clr.w     d3                  use combination mode
-          move.b    mrk+VMOD,d3
+          move.b    SEL_OPT_COMB(a6),d3
           lea       mfdb_q,a0
           move.l    stack+20,(a0)
           move.l    a1,20(a0)

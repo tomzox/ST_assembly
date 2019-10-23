@@ -56,7 +56,26 @@ SEL_STATE      equ  358  ; dc.w ; flag 0:no selection; -1:ongoing selection;
 SEL_FRM_X1Y1   equ  360  ; dc.l ; X/Y of upper-left corner (rel. to bild_adr)
 SEL_FRM_X2Y2   equ  364  ; dc.l ; X/Y of lower-right corner (rel. to bild_adr)
                ;
-DSECT_SZ       equ  368  ; total size of data section managed via A6
+SEL_OPT_COPY      equ  368   ; dc.b ; copy-mode (i.e. copy image area into sel.buf. instead of erasing)
+SEL_OPT_COMB      equ  369   ; dc.b ; configured selection combination mode
+SEL_FLAG_PASTABLE equ  370   ; dc.b ; previous selection in buffer could be pasted (buf.addr.=drawflag+12)
+                             ; $ff00:=old frame exists, $00ff
+SEL_TMP_OVERLAY   equ  373   ; dc.b ; temporary overlay mode, used after pasting selection
+;                 equ  374   ; dc.b ; -unused-
+SEL_FLAG_DEL      equ  375   ; dc.b ; delete old selection before move?
+SEL_OPT_OVERLAY   equ  376   ; dc.b ; overlay mode? (i.e. selection not copied into image until sel. is fully released)
+SEL_OV_BUF        equ  378   ; dc.l ; Addresss of buffer for overlay mode, else 0
+SEL_FLAG_CHG      equ  382   ; dc.b ; modified?
+SEL_FLAG_CUTOFF   equ  383   ; dc.b ; selection only partially visible? (due to cut-off at screen border)
+                             ;        tri-state: 0:no $7f:??  $ff:??
+SEL_CUR_COMB      equ  384   ; dc.b ; combination mode currently used
+SEL_PREV_COMB     equ  385   ; dc.b ; prev. used combination mode (copy of SEL_CUR_COMB upon moving sel.frm.): for undo
+SEL_PREV_X1Y1     equ  386   ; dc.l ; prev. selection frame coords. (for undo after cut-off at screen border)
+SEL_PREV_X2Y2     equ  390   ; dc.l ;   ... lower-right corner
+SEL_PREV_OFFSET   equ  394   ; dc.l ;   ... X/Y offsets (?)
+
+;unused           equ  398
+DSECT_SZ          equ  400  ; total size of data section managed via A6
 ;-----------------------------------------------------------------------------
           ;
           ;        *** Offsets within window struct ("wi1") ***
@@ -72,20 +91,6 @@ SCHIEBER  equ  30   ; Slider hor./vert.: position and size
 WIN_STRUCT_SZ equ 38 ; size of this data struct
 WIN_STRUCT_CNT equ 7 ; number of window structs in array
           ;
-          ;        *** Offsets within selection struct ("mrk") ***
-COPY      equ  0    ; copying?
-VMOD      equ  1    ; current selection combination mode
-EINF      equ  2    ; Selection in buffer? (addr. drawflag+12)
-OVKU      equ  3    ; OV-Kurz-Mode?
-;OVKU      equ  4   ; OV-Kurz-Mode?
-DEL       equ  5    ; delete old selection before move?
-OV        equ  6    ; OV-mode?
-BUFF      equ  8    ; Addresss OV-buffer
-CHG       equ  12   ; modified?
-PART      equ  13   ; partial/cut-off?
-MODI      equ  14   ; combination mode of cur/prev selection
-OLD       equ  16   ; cut-off -> prev coord./offset
-
           ;        *** Offsets within TEDINFO struct ***
 TED_NR    equ  0    ; Index of TEDINFO struct
 TED_LEN   equ  2    ; length of string -1

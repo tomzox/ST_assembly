@@ -31,15 +31,15 @@
  include "f_def.s"
  ;
  XREF  aescall,vdicall
- XREF  msg_buff,bildbuff,rec_adr,drawflag
+ XREF  msg_buff,bildbuff,rec_adr,drawflag,menu_adr
  XREF  show_m,hide_m,save_scr,win_rdw,rsrc_gad,set_xx,drei_chg
  XREF  save_buf,win_abs,choofig,copy_blk,win_xy,koos_mak,alertbox
  XREF  rand_tab,logbase,get_koos,over_que,fram_del,fuenf_4c,koostr1
  ;
- XDEF  chootxt,chooras,choopat,menu_adr,frraster,frinfobo,frsegmen
+ XDEF  chootxt,chooras,choopat,frraster,frinfobo,frsegmen
  XDEF  frkoordi,frmodus,frpunkt,frpinsel,frsprayd,frmuster,frtext
  XDEF  frradier,frlinie,frdrucke,frdatei,nr_vier,men_inv,check_xx
- XDEF  work_blk,form_do,form_del,form_buf,form_wrt,mrk,frzeiche
+ XDEF  work_blk,form_do,form_del,form_buf,form_wrt,frzeiche
  XDEF  chookoo,work_bl2,init_ted,koanztab,maus_neu,over_beg,over_old
  XDEF  maus_bne,cent_koo,over_cut,frrotier,frzerren,frzoomen,frprojek
  ;
@@ -234,10 +234,10 @@ nr_fuenf  cmp.l     #$80000,d0
           cmp.b     #$43,d0
           bne.s     fuenf_48
           move.w    d0,d2               --- Selection on/off ---
-          tst.b     mrk+OV
+          tst.b     SEL_OPT_OVERLAY(a6)
           beq       fuenf_43            overlay mode enabled?
           bsr       over_alo            allocate buffer for overlay, if not yet done
-          tst.w     mrk+OV              success?
+          tst.b     SEL_OPT_OVERLAY(a6) ;success?
           bne       fuenf_43
           moveq.l   #$53,d0             uncheck "overlay" menu item
           clr.w     d1
@@ -263,7 +263,8 @@ white1    bsr       save_scr
           bsr       save_buf
           move.l    BILD_ADR(a4),a0
           bsr       work_blk            execute raster operation
-          move.w    #$ff00,drawflag
+          lea       drawflag,a0
+          move.w    #$ff00,(a0)
           bsr       fram_mod
           moveq.l   #$14,d0
           bsr       men_iena
@@ -279,10 +280,9 @@ fuenf_52  cmp.b     #$52,d0
           cmp.w     #17,d4
           beq       men_inv
           move.b    frverknu+5,d1
-          lea       mrk,a0
           lea       comb_dat,a1
           ext.w     d1
-          move.b    (a1,d1.w),VMOD(a0)
+          move.b    (a1,d1.w),SEL_OPT_COMB(a6)
           beq.s     knupf1
           moveq.l   #1,d1
 knupf1    moveq.l   #$52,d0
@@ -291,28 +291,28 @@ knupf1    moveq.l   #$52,d0
           ;
 fuenf_51  cmp.b     #$51,d0
           bne.s     fuenf_53
-          lea       mrk,a0              --- Copy ---
-          not.b     COPY(a0)
-          move.b    COPY(a0),d1
+          not.b     SEL_OPT_COPY(a6)    --- Copy ---
+          move.b    SEL_OPT_COPY(a6),d1
           and.w     #1,d1
           bsr       check_xx
           bra       men_inv
           ;
 fuenf_53  cmp.b     #$53,d0
           bne       fuenf_44
-          move.b    mrk+OV,d0           --- Overlay Mode ---
-          beq       overlay1
-          bsr       over_que            ++ End ++
+          tst.b     SEL_OPT_OVERLAY(a6) ;--- Toggle Overlay Mode ---
+          beq.s     overlay1
+          bsr       over_que            ++ Leaving overlay mode ++
           bne       men_inv
-          move.l    mrk+BUFF,-(sp)
+          tst.l     SEL_OV_BUF(a6)
+          beq.s     overlay4
+          move.l    SEL_OV_BUF(a6),-(sp)
           move.w    #$49,-(sp)
           trap      #1                  mfree
           addq.l    #6,sp
           tst.l     d0
-          bne       men_inv
-          lea       mrk,a0
-          clr.b     OV(a0)
-          move.l    #-1,BUFF(a0)
+          bne       tos_err
+          clr.l     SEL_OV_BUF(a6)
+overlay4  clr.b     SEL_OPT_OVERLAY(a6)
           moveq.l   #$44,d0             disable "paste (selection)"
           bsr       men_idis
           moveq.l   #$45,d0             disable "discard (selection)"
@@ -320,8 +320,9 @@ fuenf_53  cmp.b     #$53,d0
           moveq.l   #$46,d0             disable "commit (selection)"
           bsr       men_idis
           bra.s     overlay2
+          ;
 overlay1  bsr       over_alo            ++ Enable overlay mode: alloc memory ++
-          tst.w     mrk+OV              out of memory?
+          tst.b     SEL_OPT_OVERLAY(a6) ;out of memory?
           beq.s     overlay3
           tst.w     SEL_STATE(a6)       Existing selection?
           beq.s     overlay2
@@ -331,8 +332,8 @@ overlay1  bsr       over_alo            ++ Enable overlay mode: alloc memory ++
           moveq.l   #$45,d0
           bsr       men_iena
 overlay2  moveq.l   #$53,d0             check/uncheck menu item
-          move.b    mrk+OV,d1
-          ext.w     d1
+          move.b    SEL_OPT_OVERLAY(a6),d1
+          and.w     #1,d1
           bsr       check_xx
           bra       men_inv
 overlay3  moveq.l   #1,d0               abort due to memory allocation failure
@@ -344,17 +345,16 @@ fuenf_44  cmp.b     #$44,d0
           bne       fuenf_45
           tst.w     SEL_STATE(a6)       --- Paste selection ---
           bne       einfug5
-          move.b    mrk+EINF,d0
+          tst.b     SEL_FLAG_PASTABLE(a6)
           beq       men_inv
           bsr       save_scr
           bsr       save_buf
-          move.b    mrk+OV,d0           Overlay mode?
+          tst.b     SEL_OPT_OVERLAY(a6) ;Overlay mode?
           beq.s     einfug2
-          lea       mrk,a2
-          move.b    COPY(a2),d2
-          move.b    #-1,COPY(a2)
+          move.b    SEL_OPT_COPY(a6),d2
+          move.b    #-1,SEL_OPT_COPY(a6)
           bsr       over_beg
-          move.b    d2,COPY(a2)
+          move.b    d2,SEL_OPT_COPY(a6)
 einfug2   bsr       win_abs             calc window coords.
           move.l    (a0),d0
           sub.l     d0,4(a0)
@@ -385,32 +385,33 @@ einfug3   bsr       copy_blk
           bsr       men_iena
           moveq.l   #$44,d0
           bsr       men_idis
-          lea       mrk,a1
-          tst.b     OV(a1)
+          tst.b     SEL_OPT_OVERLAY(a6)
           beq.s     einfug4
           moveq.l   #$45,d0             enable "discard (selection)"
           bsr       men_iena
-          clr.b     CHG(a1)
-          clr.b     PART(a1)
-          clr.w     MODI(a1)
+          clr.b     SEL_FLAG_CHG(a6)
+          clr.b     SEL_FLAG_CUTOFF(a6)
+          clr.b     SEL_CUR_COMB(a6)
+          clr.b     SEL_PREV_COMB(a6)
 einfug4   move.l    menu_adr,a0
           add.w     #1739,a0
           moveq.l   #7,d0
 einfug1   bclr.b    #3,(a0)
           add.w     #24,a0
           dbra      d0,einfug1
-          move.w    #$ff,mrk+EINF       select paste mode for moving
+          move.w    #$00ff,SEL_FLAG_PASTABLE(a6)    select paste mode for moving
           bra       win_rdw
-einfug5   lea       mrk,a2              ++ OV-Mode-II ++
-          tst.b     OV(a2)
+einfug5   ;                             ++ Overlay-Mode-II ++
+          tst.b     SEL_OPT_OVERLAY(a6)
           beq       men_inv
           bsr       over_que
           bne       men_inv
-          move.b    MODI(a2),CHG(a2)
-          move.b    COPY(a2),d3
-          move.b    #-1,COPY(a2)
+          tst.b     SEL_CUR_COMB(a6)
+          sne.b     SEL_FLAG_CHG(a6)
+          move.b    SEL_OPT_COPY(a6),d3
+          move.b    #-1,SEL_OPT_COPY(a6)
           bsr       over_beg            copy selection content into image
-          move.b    d3,COPY(a2)
+          move.b    d3,SEL_OPT_COPY(a6)
           lea       drawflag,a0
           clr.w     (a0)
           moveq.l   #$14,d0             disable "undo"
@@ -423,12 +424,12 @@ fuenf_45  cmp.b     #$45,d0
           bne       fuenf_46
           tst.w     SEL_STATE(a6)       --- Discard selection ---
           beq       men_inv
-          move.b    mrk+OV,d0
+          move.b    SEL_OPT_OVERLAY(a6),d0
           beq       men_inv
           bsr       save_scr
-          move.b    mrk+PART,d0
+          tst.b     SEL_FLAG_CUTOFF(a6)
           bmi.s     werfweg2
-          move.b    mrk+MODI,d0
+          tst.b     SEL_CUR_COMB(a6)
           bne.s     werfweg3
 werfweg2  bsr       save_buf
 werfweg3  clr.b     SEL_STATE(a6)
@@ -436,12 +437,11 @@ werfweg3  clr.b     SEL_STATE(a6)
           lea       drawflag,a0
           move.w    #-1,(a0)
           move.l    #$12345678,12(a0)   Magic for "Undo"
-          lea       mrk,a0              disable pasting
-          clr.w     EINF(a0)
-          move.b    MODI(a0),MODI+1(a0)
-          clr.b     MODI(a0)
+          clr.w     SEL_FLAG_PASTABLE(a6)   ; disable pasting
+          move.b    SEL_CUR_COMB(a6),SEL_PREV_COMB(a6)  ; store current combination mode for undo, then reset
+          clr.b     SEL_CUR_COMB(a6)
           move.w    #3999,d0
-          move.l    BUFF(a0),a0
+          move.l    SEL_OV_BUF(a6),a0
           move.l    BILD_ADR(a4),a1
 werfweg1  move.l    (a0)+,(a1)+
           move.l    (a0)+,(a1)+
@@ -457,8 +457,7 @@ fuenf_46  cmp.b     #$46,d0
           bne       fuenf_4b
           tst.w     SEL_STATE(a6)       --- Commit selection ---
           beq       men_exit
-          lea       mrk,a2
-          tst.b     OV(a2)
+          tst.b     SEL_OPT_OVERLAY(a6)
           beq       men_exit
           moveq.l   #22,d1              + Disable +
           bsr       rsrc_gad
@@ -468,16 +467,16 @@ fuenf_46  cmp.b     #$46,d0
           move.w    #8,130(a3)
           move.w    #7,80(a3)
           move.w    #5,104(a3)
-          tst.b     MODI(a2)            combine with image area?
+          tst.b     SEL_CUR_COMB(a6)    combine with image area?
           bne.s     ueber1
-          tst.b     PART(a2)
+          tst.b     SEL_FLAG_CUTOFF(a6)
           beq.s     ueber4
           bset.b    #3,83(a3)
           bclr.b    #3,107(a3)
           move.b    #5,81(a3)
           move.b    #7,105(a3)
           bra.s     ueber2
-ueber1    tst.b     PART(a2)            selection clipped?
+ueber1    tst.b     SEL_FLAG_CUTOFF(a6) ;selection clipped?
           beq.s     ueber2
           bclr.b    #3,107(a3)
           bclr.b    #3,131(a3)
@@ -487,22 +486,20 @@ ueber2    lea       fruebern,a2         + ask user +
           bsr       form_del
           cmp.b     #6,d4               cancel?
           beq       men_inv
-          lea       mrk,a0
           subq.b    #2,d4
           btst      #0,d4
           beq.s     ueber3
-          clr.b     MODI(a0)            choose combination mode
+          clr.b     SEL_CUR_COMB(a6)    choose combination mode
 ueber3    btst      #1,d4
           beq.s     ueber4
-          clr.b     PART(a0)            remove clipped part
+          clr.b     SEL_FLAG_CUTOFF(a6) ;remove clipped part
           lea       drawflag,a1         and disable "undo"
           clr.w     (a1)
           moveq.l   #$14,d0             disable "undo"
           bsr       men_idis
-ueber4    lea       mrk,a0
-          tst.b     MODI(a0)            + keep "commit" enabled? +
+ueber4    tst.b     SEL_CUR_COMB(a6)    + keep "commit" enabled? +
           bne       men_inv
-          tst.b     PART(a0)
+          tst.b     SEL_FLAG_CUTOFF(a6)
           bne       men_inv
           moveq.l   #$46,d0             disable "commit"
           bsr       men_idis
@@ -752,9 +749,9 @@ raster2   dbra      d2,raster1
           ;
 sechs_5a  cmp.b     #$5a,d0
           bne.s     sechs_59
-          move.w    chooras,d1          --- Enable/disable rastering ---
+          lea       chooras,a0          --- Enable/disable rastering ---
+          move.w    (a0),d1
           eor.b     #1,d1
-          lea       chooras,a0
           move.w    d1,(a0)
           bsr       check_xx
           bra.s     men_inv
@@ -827,11 +824,11 @@ obj_draw  move.l    d6,INTIN+4(a6)            ** draw object **
           aes       42 6 1 1 0 !d0 !d1  ;obj_draw
           rts
           ;
-over_cut  lea       mrk,a2              ** "discard clipped selection?" **
-          tst.b     OV(a2)
-          beq       men_exit
-          tst.b     PART(a2)
-          bpl       men_exit
+over_cut                                ** "discard clipped selection?" **
+          tst.b     SEL_OPT_OVERLAY(a6)
+          beq.s     over_cu2
+          tst.b     SEL_FLAG_CUTOFF(a6)
+          bpl.s     over_cu2
           move.w    d0,d2
           lea       stralcut,a0
           moveq.l   #1,d0
@@ -839,69 +836,67 @@ over_cut  lea       mrk,a2              ** "discard clipped selection?" **
           cmp.w     #1,d0
           bne.s     over_cu1
           move.w    d2,d0
-          clr.b     PART(a2)
-          rts
+          clr.b     SEL_FLAG_CUTOFF(a6)
+over_cu2  rts
 over_cu1  addq.l    #4,sp               no -> abort
           bra       men_inv
           ;
-over_old  move.b    mrk+OV,d0           ** undo combination **
-          beq       men_exit
-          move.b    mrk+MODI,d0
+over_old  move.b    SEL_OPT_OVERLAY(a6),d0           ** undo combination **
+          beq       over_ol3
+          tst.b     SEL_CUR_COMB(a6)
           beq.s     over_ol1
-          move.b    mrk+PART,d0
+          tst.b     SEL_FLAG_CUTOFF(a6)
           bmi.s     over_ol1
           movem.l   d2-d7/a2-a3,-(sp)
           move.l    drawflag+4,d0
           move.l    drawflag+8,d1
-          move.b    mrk+PART,d2
+          tst.b     SEL_FLAG_CUTOFF(a6)
           beq.s     over_ol2
-          move.l    mrk+OLD,d0
-          move.l    mrk+OLD+4,d1
+          move.l    SEL_PREV_X1Y1(a6),d0
+          move.l    SEL_PREV_X2Y2(a6),d1
 over_ol2  move.l    SEL_FRM_X1Y1(a6),d2
           move.l    bildbuff,a0
           move.l    rec_adr,a1
           move.l    BILD_ADR(a1),a1
           bsr       copy_blk
           movem.l   (sp)+,d2-d7/a2-a3
-over_ol1  lea       mrk,a0
-          move.b    #-1,CHG(a0)         modification done
-          move.b    MODI(a0),MODI+1(a0)
-          clr.b     MODI(a0)
+over_ol1  move.b    #-1,SEL_FLAG_CHG(a6)  ; modification done
+          move.b    SEL_CUR_COMB(a6),SEL_PREV_COMB(a6)
+          clr.b     SEL_CUR_COMB(a6)
           moveq.l   #$44,d0             enable "paste (selection)"
           bsr       men_iena
-          tst.b     mrk+PART
+          tst.b     SEL_FLAG_CUTOFF(a6)
           bmi.s     over_ol3
           moveq.l   #$46,d0             disable "commit"
           bsr       men_idis
 over_ol3  rts
           ;
-over_alo  tst.l     mrk+BUFF            ** Allocate memory for selection overlay buffer **
+over_alo  tst.l     SEL_OV_BUF(a6)      ** Allocate memory for selection overlay buffer **
           bne       over_al1
           move.l    #32010,-(sp)
           move.w    #$48,-(sp)
           trap      #1
           addq.l    #6,sp
-          lea       mrk,a0
           tst.l     d0
           bmi.s     over_al2
-over_al1  move.w    #$ff00,OV(a0)
-          move.l    d0,BUFF(a0)
+over_al1  move.b    #$ff,SEL_OPT_OVERLAY(a6)
+          move.l    d0,SEL_OV_BUF(a6)
           rts
-over_al2  clr.w     OV(a0)
+over_al2  clr.b     SEL_OPT_OVERLAY(a6)
           rts
 
 over_beg  move.w    #1999,d0            ** Prepare overlay mode **
           move.l    rec_adr,a0
           move.l    BILD_ADR(a0),a0
-          move.l    mrk+BUFF,a1
+          move.l    SEL_OV_BUF(a6),a1
 over_be1  move.l    (a0)+,(a1)+
           move.l    (a0)+,(a1)+
           move.l    (a0)+,(a1)+
           move.l    (a0)+,(a1)+
           dbra      d0,over_be1
-          move.b    mrk+COPY,d0         copy?
+          tst.b     SEL_OPT_COPY(a6)    copy?
           bne       men_exit
-          move.l    mrk+BUFF,a0
+          move.l    SEL_OV_BUF(a6),a0
           clr.w     d3
           ;
 work_blk  move.l    SEL_FRM_X1Y1(a6),d0       ** Execute raster copy via VDI **
@@ -1283,7 +1278,6 @@ init_te1  moveq.l   #8,d0
           move.l    (sp)+,a2
           rts
 *-------------------------------------------------------MENU-VARIABLES
-menu_adr  ds.l    1
 choopat   dc.w    $aaaa                 ; bitmask of user-defined line pattern
 chooras   dc.w    0                     ; flag: grid mode enabled?
 chootxt   dc.w    0
@@ -1295,7 +1289,6 @@ chookoo   dc.w    0                     ; flag: 0:disabled; 1:enable mouse coord
 choofil   dcb.w   16,0                  ; bitmasks of user-defined fill pattern
 koanztab  dc.b    1,0,0,1,1,1,0,3,3,3,1,3,3,3
 *--------------------------------------------------------------STRUCTS
-mrk       dcb.w   14,0
 comb_dat  dc.b    0,1,6,7,2,11,4,13,14,9,8
 work_dat  dc.w    0,15,10
 mfdb_q    dc.w    0000,0000,00,00,40,0,1,0,0,0

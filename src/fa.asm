@@ -31,12 +31,12 @@
  include "f_def.s"
  ;
  XREF  evt_butt,evt_menu,fram_drw,save_buf
- XREF  menu_adr,directory,alertbox,mrk,koos_mak,wind_chg
+ XREF  directory,alertbox,koos_mak,wind_chg
  ;
  XDEF  aescall,vdicall
  XDEF  bildbuff,wi1,rec_adr,win_rdw,show_m,hide_m
  XDEF  save_scr,set_xx,rsrc_gad,vslidrw,wi_count,drawflag,logbase
- XDEF  fram_del,fram_mod,copy_blk,rand_tab,msg_buff
+ XDEF  fram_del,fram_mod,copy_blk,rand_tab,msg_buff,menu_adr
 
 **********************************************************************
 *   Module structure:
@@ -172,8 +172,7 @@ getdir2   move.b    (a0)+,(a2)+
           lea       wi1,a4                    Address of first window
           lea       rec_adr,a0                assign to pointer to current window
           move.l    a4,(a0)
-          lea       mrk,a0                    ; enable selection overlay mode by default
-          move.b    #$1,OV(a0)
+          move.b    #-1,SEL_OPT_OVERLAY(a6)   enable selection overlay mode by default
 *--------------------------------------------------------EVENT-HANDLER
 evt_multi ;                                   ; wait for message, but max. 70ms
           lea       msg_buff,a0
@@ -569,8 +568,7 @@ closed5   move.l    FENSTER(a4),d0
           move.l    drawflag+12,d0      no; undo buffer refers to current window?
           cmp.l     BILD_ADR(a4),d0
           bne.s     closed8
-          lea       mrk,a0              yes -> disable paste
-          clr.w     EINF(a0)
+          clr.w     SEL_FLAG_PASTABLE(a6)    yes -> disable paste
           moveq.l   #$44,d0             disable "paste" menu entry
           bsr       men_idis
           bra.s     closed8
@@ -771,9 +769,8 @@ save_scr  move.w    wi_count,d0         ** Release screen buffer **
           bset.b    #1,INFO(a1)         is image modified?
 save_sc1  lea       drawflag,a0
           clr.w     (a0)                buffer free & move done
-          lea       mrk,a0
-          clr.b     OVKU(a0)            short-overlay mode cleared
-          clr.b     DEL(a0)             do not delete old border
+          clr.b     SEL_TMP_OVERLAY(a6) short-overlay mode cleared
+          clr.b     SEL_FLAG_DEL(a6)    do not delete old border
           moveq.l   #$14,d0             disable "undo" menu entry
           bra       men_idis
           ;
@@ -805,8 +802,7 @@ fram_de1  bset.b    #3,(a0)             disable menu entries
           move.l    SEL_FRM_X1Y1(a6),(a0)+
           move.l    SEL_FRM_X2Y2(a6),(a0)+
           move.l    d0,(a0)+
-          lea       mrk+EINF,a0         set flag "old frame exists"
-          move.w    #$ff00,(a0)
+          move.w    #$ff00,SEL_FLAG_PASTABLE(a6)   ;set flag "old frame exists"
           tst.b     SEL_STATE(a6)       is frame drawn?
           beq.s     fram_de3
           movem.l   a1-a4/d2-d7,-(sp)
@@ -1130,7 +1126,8 @@ rand_tab  dc.w      $ffff,$7fff,$3fff,$1fff,$fff,$7ff,$3ff,$1ff,$ff
           dc.w      $7f,$3f,$1f,$f,7,3,1,0
 blk_data  ds.w      10
 *-----------------------------------------------------WINDOW-VARIABLES
-dsect_a6  ds.l      DSECT_SZ/4
+dsect_a6  ds.l      (DSECT_SZ+3)/4
+menu_adr  ds.l      1          Address of menu object tree
 logbase   ds.l      1          Address of screen buffer
 bildbuff  ds.l      1          Address of general buffer
 rec_adr   ds.l      1          Address of current window's record within "wi1", or address of "wiabs" in abs.mode

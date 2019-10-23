@@ -33,7 +33,7 @@
  XREF  aescall,vdicall
  XREF  logbase,bildbuff,rec_adr,drawflag,rand_tab
  XREF  show_m,hide_m,save_buf,save_scr,win_rdw,copy_blk,alertbox
- XREF  cent_koo,form_buf,men_inv,mrk,over_cut,over_old
+ XREF  cent_koo,form_buf,men_inv,over_cut,over_old
  XREF  win_xy,work_blk,form_do,frrotier,frzoomen,frzerren
  XREF  work_bl2,form_del
  ;
@@ -78,9 +78,8 @@ fuenf_4c  cmp.b     #$4c,d0
           bsr       fram_mod
           moveq.l   #$14,d0
           bsr       men_iena
-          lea       mrk,a0              short overlay mode
-          move.w    #$ff,EINF(a0)
-          move.b    #-1,DEL(a0)         clear old rect. before operation
+          move.w    #$00ff,SEL_FLAG_PASTABLE(a6)   short overlay mode
+          move.b    #-1,SEL_FLAG_DEL(a6)          clear old rect. before operation
           bsr       men_inv
           bra       win_rdw
           ;
@@ -231,9 +230,8 @@ zoom35    lea       drawflag+4,a2
           move.l    rec_adr,a4
           moveq.l   #$14,d0             enable "undo"
           bsr       men_iena
-          lea       mrk,a0
-          move.w    #$ff,EINF(a0)
-          move.b    #-1,DEL(a0)
+          move.w    #$00ff,SEL_FLAG_PASTABLE(a6)
+          move.b    #-1,SEL_FLAG_DEL(a6)
 zoom36    bsr       men_inv
           bra       win_rdw
           ;
