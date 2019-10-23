@@ -35,7 +35,7 @@
  ;
  XDEF  aescall,vdicall
  XDEF  bildbuff,wi1,rec_adr,win_rdw,show_m,hide_m
- XDEF  save_scr,set_xx,rsrc_gad,vslidrw,wi_count,drawflag,logbase
+ XDEF  save_scr,set_xx,rsrc_gad,vslidrw,wi_count,logbase
  XDEF  fram_del,fram_mod,copy_blk,rand_tab,msg_buff,menu_adr
 
 **********************************************************************
@@ -264,7 +264,7 @@ redraw6   cmp.w     d0,d1               no intersection?
           swap      d1
           cmp.w     d0,d1
           blo.s     redraw7
-redraw11  move.l    d0,d2
+          move.l    d0,d2
           add.w     YX_OFF(a3),d0
           add.w     YX_OFF(a3),d1
           add.l     YX_OFF+2(a3),d0
@@ -336,7 +336,7 @@ hslid     cmp.w     #25,d0
           sub.w     FENSTER+4(a4),d0
           mulu      d0,d1
           bsr       divu1000            D1:=D1/1000
-hslid2    sub.w     FENSTER(a4),d1
+          sub.w     FENSTER(a4),d1
           move.w    d1,YX_OFF+2(a4)
           move.w    msg_buff+8,d1
           move.w    d1,SCHIEBER(a4)
@@ -561,11 +561,10 @@ closed5   move.l    FENSTER(a4),d0
           clr.b     INFO(a4)
           moveq.l   #$14,d0             disable "undo" menu entry
           bsr       men_idis
-          lea       drawflag,a0
-          clr.w     (a0)
+          clr.w     UNDO_STATE(a6)
           tst.w     SEL_STATE(a6)       selection ongoing?
           bne.s     closed7
-          move.l    drawflag+12,d0      no; undo buffer refers to current window?
+          move.l    UNDO_BUF_ADDR(a6),d0      no; undo buffer refers to current window?
           cmp.l     BILD_ADR(a4),d0
           bne.s     closed8
           clr.w     SEL_FLAG_PASTABLE(a6)    yes -> disable paste
@@ -761,14 +760,13 @@ maus_mov  subq.l    #8,sp               ** Mouse movement interrupt **
           ;
 save_scr  move.w    wi_count,d0         ** Release screen buffer **
           beq       exec_rts
-          move.b    drawflag,d0
+          tst.b     UNDO_STATE(a6)
           beq       exec_rts
           move.l    rec_adr,a1
           bclr.b    #3,INFO(a1)
           bne.s     save_sc1
           bset.b    #1,INFO(a1)         is image modified?
-save_sc1  lea       drawflag,a0
-          clr.w     (a0)                buffer free & move done
+save_sc1  clr.w     UNDO_STATE(a6)      buffer free & move done
           clr.b     SEL_TMP_OVERLAY(a6) short-overlay mode cleared
           clr.b     SEL_FLAG_DEL(a6)    do not delete old border
           moveq.l   #$14,d0             disable "undo" menu entry
@@ -797,11 +795,9 @@ fram_de1  bset.b    #3,(a0)             disable menu entries
           add.w     #24,a0
           dbra      d0,fram_de1
           move.l    rec_adr,a0          store old frame coord.
-          move.l    BILD_ADR(a0),d0
-          lea       drawflag+4,a0
-          move.l    SEL_FRM_X1Y1(a6),(a0)+
-          move.l    SEL_FRM_X2Y2(a6),(a0)+
-          move.l    d0,(a0)+
+          move.l    SEL_FRM_X1Y1(a6),UNDO_SEL_X1Y1(a6)
+          move.l    SEL_FRM_X2Y2(a6),UNDO_SEL_X2Y2(a6)
+          move.l    BILD_ADR(a0),UNDO_BUF_ADDR(a6)
           move.w    #$ff00,SEL_FLAG_PASTABLE(a6)   ;set flag "old frame exists"
           tst.b     SEL_STATE(a6)       is frame drawn?
           beq.s     fram_de3
@@ -822,11 +818,10 @@ fram_de2  clr.w     SEL_STATE(a6)       no
           movem.l   (sp)+,a1-a4/d2-d7
           rts
           ;
-fram_mod  move.l    BILD_ADR(a0),d0     ** Selection content modified **
-          lea       drawflag+4,a0
-          move.l    SEL_FRM_X1Y1(a6),(a0)+
-          move.l    SEL_FRM_X2Y2(a6),(a0)+
-          move.l    d0,(a0)+
+fram_mod  ;                             ** Selection content modified **
+          move.l    SEL_FRM_X1Y1(a6),UNDO_SEL_X1Y1(a6)
+          move.l    SEL_FRM_X2Y2(a6),UNDO_SEL_X2Y2(a6)
+          move.l    BILD_ADR(a0),UNDO_BUF_ADDR(a6)
           rts
           ;
 sizedsub  move.l    d3,FENSTER+4(a4)    ** Set window size **
@@ -903,8 +898,10 @@ vdicall   move.w    GRHANDLE(a6),CONTRL+12(a6)
 **  Function parameters
 **  ===================
 **    D0:  X/Y-coordinates of the upper-left corner of source
-**    D1:  X/Y-coordinates of the lower-right corder of the source
+**    D1:  X/Y-coordinates of the lower-right corner of the source
 **    D2:  X/Y-coordinates of the upper-left corner of the destination
+**    A0:  source base address
+**    A1:  target base address
 **
 **********************************************************************
           ;
@@ -1132,13 +1129,6 @@ logbase   ds.l      1          Address of screen buffer
 bildbuff  ds.l      1          Address of general buffer
 rec_adr   ds.l      1          Address of current window's record within "wi1", or address of "wiabs" in abs.mode
 maxwin    dc.w      1,37,620,342  Window size after maximize
-          ;                    -- Flags for undo and paste --
-drawflag  dc.w      0          undo flag: 0:disabled -1:enabled $ff00:selection-moved
-          dc.w      0          ??
-          dc.l      0          old selection X1/Y1
-          dc.l      0          old selection X2/Y2
-          dc.l      0          #$12345678 for undo of shape draw,
-          ;                    or copy of selection buffer "BILD_ADR(a4)"
 *-----------------------------------------------------WINDOW-VARIABLES
 wi_count  dc.w      0          Number of open windows
 wi1       dc.w    -1,0,0,0,0,0,0,0,-40,-03,0,03,40,614,337,0,0,959,887

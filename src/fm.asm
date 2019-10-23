@@ -33,7 +33,7 @@
  XREF  aescall,vdicall,stack
  XREF  msg_buff,bildbuff,wi1,wi_count,rec_adr,menu_adr,nr_vier,win_xy
  XREF  last_koo,rsrc_gad,save_scr,set_xx,win_rdw,form_wrt
- XREF  drawflag,fram_del,form_do,form_del,men_inv,form_buf
+ XREF  fram_del,form_do,form_del,men_inv,form_buf
  XREF  frinfobo,frsegmen,frkoordi,frdrucke,frdatei,check_xx,koanztab
  XREF  init_ted,copy_blk,maus_neu,fram_ins,maus_bne
  ;
@@ -105,8 +105,7 @@ new1      bsr       fram_del
           bsr       men_idis
           moveq.l   #$1a,d0             disable "save"
           bsr       men_idis
-          lea       drawflag,a1
-          move.l    12(a1),d0
+          move.l    UNDO_BUF_ADDR(a6),d0
           cmp.l     BILD_ADR(a4),d0
           bne.s     new4
           moveq.l   #$44,d0             disable "paste (selection)"
@@ -114,7 +113,7 @@ new1      bsr       fram_del
           clr.w     SEL_FLAG_PASTABLE(a6)
 new4      clr.w     SEL_STATE(a6)
           move.b    #1,INFO(a4)         only open-flag set
-          clr.w     (a1)
+          clr.w     UNDO_STATE(a6)
           move.w    #3999,d0
           move.l    BILD_ADR(a4),a0
 new2      clr.l     (a0)+               clear window buffer
@@ -393,7 +392,7 @@ tos_err   neg.w     d0                  ++ report error ++
           ;
 zwei_14   cmp.b     #$14,d0
           bne       zwei_1b
-          move.b    drawflag,d0         --- Command: Undo ---
+          tst.b     UNDO_STATE(a6)      --- Command: Undo ---
           beq       open_rts
           btst.b    #1,INFO(a4)         single modification only so far?
           bne.s     regen8
@@ -413,11 +412,10 @@ regen12   move.l    (a0)+,(a1)+
           move.l    (a0)+,(a1)+
           dbra      d0,regen12
           lea       stack,a0            parameter
-          lea       drawflag+4,a1
-          move.l    (a1),d0
-          move.l    SEL_FRM_X1Y1(a6),(a1)+
-          move.l    (a1),d1
-          move.l    SEL_FRM_X2Y2(a6),(a1)
+          move.l    UNDO_SEL_X1Y1(a6),d0
+          move.l    SEL_FRM_X1Y1(a6),UNDO_SEL_X1Y1(a6)
+          move.l    UNDO_SEL_X2Y2(a6),d1
+          move.l    SEL_FRM_X2Y2(a6),UNDO_SEL_X2Y2(a6)
           move.l    d1,d2
           sub.l     d0,d2
           move.l    d0,4(a0)
@@ -471,23 +469,22 @@ regen1    move.l    (a0),d0
           move.l    (a1),(a0)+
           move.l    d0,(a1)+
           dbra      d1,regen1
-          move.b    drawflag+1,d0       undo of selection movement?
+          tst.b     UNDO_STATE+1(a6)    undo of selection movement?
           beq       regen2
-          lea       drawflag,a0
           move.w    #-1,SEL_STATE(a6)
-          move.l    4(a0),d0
-          move.l    8(a0),d1
-          move.l    SEL_FRM_X1Y1(a6),4(a0)
-          move.l    SEL_FRM_X2Y2(a6),8(a0)
+          move.l    UNDO_SEL_X1Y1(a6),d0
+          move.l    UNDO_SEL_X2Y2(a6),d1
+          move.l    SEL_FRM_X1Y1(a6),UNDO_SEL_X1Y1(a6)
+          move.l    SEL_FRM_X2Y2(a6),UNDO_SEL_X2Y2(a6)
           move.l    d0,SEL_FRM_X1Y1(a6)
           move.l    d1,SEL_FRM_X2Y2(a6)
           bpl.s     regen4
           clr.w     SEL_STATE(a6)       ++ clear window frame ++
           move.l    menu_adr,a2
           bset.b    #3,1667(a2)         disable "discard" menu entry
-          cmp.l     #$12345678,12(a0)   is pasting allowed?
+          cmp.l     #$12345678,UNDO_BUF_ADDR(a6) ;is pasting allowed?
           beq.s     regen7
-          move.l    BILD_ADR(a4),12(a0) yes
+          move.l    BILD_ADR(a4),UNDO_BUF_ADDR(a6) ;yes
           move.w    #$ff00,SEL_FLAG_PASTABLE(a6)
           moveq.l   #$44,d0             enable "paste (selection)" menu entry
           bsr       men_iena
@@ -996,7 +993,7 @@ drei_2e   cmp.w     #$31,d0
           add.w     d1,a0
           move.w    (a0),d1
           eor.b     #1,d1
-drei_11   move.w    d1,(a0)
+          move.w    d1,(a0)
           bsr       check_xx
           lea       chooset,a0
           tst.w     (a0)
@@ -1067,7 +1064,7 @@ koo_chk3  moveq.l   #$56,d0             enable "coordinates"
           ;
 wind_chg  btst.b    #1,INFO(a4)         ** Image modified? **
           bne.s     wind_ch1
-          move.w    drawflag,d0
+          tst.w     UNDO_STATE(a6)
           beq.s     wind_ch1
           bchg.b    #3,INFO(a4)
           bchg.b    #3,INFO(a4)
@@ -1241,9 +1238,7 @@ stralneu  dc.b   '[1][Please confirm discarding|'
           dc.b   '][Ok|Cancel]',0
 stralnof  dc.b   '[2][File not found!|'
           dc.b   'Choose another file?'
-          dc.b   '][Ja|Nein]',0
-stralnds  dc.b   '[3][Not enough space on disk'
-          dc.b   '][Cancel]',0
+          dc.b   '][Yes|No]',0
 stralfsd  dc.b   '[1][File with this name already|'
           dc.b   'exists! Overwrite this file?'
           dc.b   '][Ok|Cancel]',0
@@ -1273,7 +1268,6 @@ stralovq  dc.b   '[1][You are about to commit the|'
           dc.b   'background'
           dc.b   '][Ok|Cancel]',0
 *------------------------------------------------------------------I/O
-nulstr    dc.b   0,0
 directory ds.w   35
 filename  dcb.w  7,0
 dta       ds.w   25             ; GEMDOS-internal buffer for directory searches (struct DTA, size 22*2 bytes)
@@ -1283,5 +1277,6 @@ escfeed   dc.b   27,65,8,0
 eschigh   dc.w   $1b4c,0000,0
 drucktab  dc.b   $ff,$7f,$3f,$1f,$0f,$07,$03,$01
           dc.b   $80,$c0,$e0,$f0,$f8,$fc,$fe,$ff
-          ;
+*---------------------------------------------------------------------
+          align 2
           end

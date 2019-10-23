@@ -31,7 +31,7 @@
  include "f_def.s"
  ;
  XREF  aescall,vdicall
- XREF  msg_buff,bildbuff,rec_adr,drawflag,menu_adr
+ XREF  msg_buff,bildbuff,rec_adr,menu_adr
  XREF  show_m,hide_m,save_scr,win_rdw,rsrc_gad,set_xx,drei_chg
  XREF  save_buf,win_abs,choofig,copy_blk,win_xy,koos_mak,alertbox
  XREF  rand_tab,logbase,get_koos,over_que,fram_del,fuenf_4c,koostr1
@@ -263,8 +263,7 @@ white1    bsr       save_scr
           bsr       save_buf
           move.l    BILD_ADR(a4),a0
           bsr       work_blk            execute raster operation
-          lea       drawflag,a0
-          move.w    #$ff00,(a0)
+          move.w    #$ff00,UNDO_STATE(a6)
           bsr       fram_mod
           moveq.l   #$14,d0
           bsr       men_iena
@@ -358,8 +357,8 @@ fuenf_44  cmp.b     #$44,d0
 einfug2   bsr       win_abs             calc window coords.
           move.l    (a0),d0
           sub.l     d0,4(a0)
-          move.l    drawflag+8,d2
-          sub.l     drawflag+4,d2
+          move.l    UNDO_SEL_X2Y2(a6),d2
+          sub.l     UNDO_SEL_X1Y1(a6),d2
           lea       win_xy+6,a2
           lea       YX_OFF(a4),a3
           bsr       cent_koo            center selection within the window
@@ -367,9 +366,9 @@ einfug2   bsr       win_abs             calc window coords.
           move.l    d0,SEL_FRM_X1Y1(a6)
           move.l    d1,SEL_FRM_X2Y2(a6)
           move.l    d0,d2
-          move.l    drawflag+4,d0       copy selection content to the image
-          move.l    drawflag+8,d1
-          move.l    drawflag+12,a0
+          move.l    UNDO_SEL_X1Y1(a6),d0       copy selection content to the image
+          move.l    UNDO_SEL_X2Y2(a6),d1
+          move.l    UNDO_BUF_ADDR(a6),a0
           move.l    BILD_ADR(a4),a1
           cmp.l     a0,a1
           bne.s     einfug3
@@ -377,10 +376,9 @@ einfug2   bsr       win_abs             calc window coords.
 einfug3   bsr       copy_blk
           move.w    #$43,d2             check "selection"
           bsr       drei_chg
-          lea       drawflag,a0         enable "undo"
-          move.l    #$ffff0000,(a0)+
-          move.l    #-1,(a0)+
-          move.l    #-1,(a0)
+          move.w    #-1,UNDO_STATE(a6)  ;enable undo
+          move.l    #-1,UNDO_SEL_X1Y1(a6)
+          move.l    #-1,UNDO_SEL_X2Y2(a6)
           moveq.l   #$14,d0             enable "undo" menu entry
           bsr       men_iena
           moveq.l   #$44,d0
@@ -412,8 +410,7 @@ einfug5   ;                             ++ Overlay-Mode-II ++
           move.b    #-1,SEL_OPT_COPY(a6)
           bsr       over_beg            copy selection content into image
           move.b    d3,SEL_OPT_COPY(a6)
-          lea       drawflag,a0
-          clr.w     (a0)
+          clr.w     UNDO_STATE(a6)
           moveq.l   #$14,d0             disable "undo"
           bsr       men_idis
           moveq.l   #$44,d0             disable "paste (selection)"
@@ -434,9 +431,8 @@ fuenf_45  cmp.b     #$45,d0
 werfweg2  bsr       save_buf
 werfweg3  clr.b     SEL_STATE(a6)
           bsr       fram_del
-          lea       drawflag,a0
-          move.w    #-1,(a0)
-          move.l    #$12345678,12(a0)   Magic for "Undo"
+          move.w    #-1,UNDO_STATE(a6)
+          move.l    #$12345678,UNDO_BUF_ADDR(a6)   Magic for "Undo"
           clr.w     SEL_FLAG_PASTABLE(a6)   ; disable pasting
           move.b    SEL_CUR_COMB(a6),SEL_PREV_COMB(a6)  ; store current combination mode for undo, then reset
           clr.b     SEL_CUR_COMB(a6)
@@ -493,8 +489,7 @@ ueber2    lea       fruebern,a2         + ask user +
 ueber3    btst      #1,d4
           beq.s     ueber4
           clr.b     SEL_FLAG_CUTOFF(a6) ;remove clipped part
-          lea       drawflag,a1         and disable "undo"
-          clr.w     (a1)
+          clr.w     UNDO_STATE(a6)      and disable "undo"
           moveq.l   #$14,d0             disable "undo"
           bsr       men_idis
 ueber4    tst.b     SEL_CUR_COMB(a6)    + keep "commit" enabled? +
@@ -575,8 +570,7 @@ spihor3   move.w    (a0)+,d0
 spihor4   lea       80(a2),a0
           lea       -80(a3),a1
           dbra      d7,spihor1
-          lea       drawflag,a0         enable "undo"
-          move.w    #$ff00,(a0)
+          move.w    #$ff00,UNDO_STATE(a6)  ;enable "undo"
           bsr       fram_mod
           moveq.l   #$14,d0
           bsr       men_iena
@@ -704,8 +698,7 @@ spiver12  move.l    SEL_FRM_X1Y1(a6),d2    + shift +
           move.l    bildbuff,a0
           move.l    BILD_ADR(a4),a1
           bsr       copy_blk
-spiver10  lea       drawflag,a0         enable "undo"
-          move.w    #$ff00,(a0)
+spiver10  move.w    #$ff00,UNDO_STATE(a6) ;enable "undo"
           bsr       fram_mod
           moveq.l   #$14,d0
           bsr       men_iena
@@ -848,8 +841,8 @@ over_old  move.b    SEL_OPT_OVERLAY(a6),d0           ** undo combination **
           tst.b     SEL_FLAG_CUTOFF(a6)
           bmi.s     over_ol1
           movem.l   d2-d7/a2-a3,-(sp)
-          move.l    drawflag+4,d0
-          move.l    drawflag+8,d1
+          move.l    UNDO_SEL_X1Y1(a6),d0
+          move.l    UNDO_SEL_X2Y2(a6),d1
           tst.b     SEL_FLAG_CUTOFF(a6)
           beq.s     over_ol2
           move.l    SEL_PREV_X1Y1(a6),d0

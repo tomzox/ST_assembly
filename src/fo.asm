@@ -31,7 +31,7 @@
  include "f_def.s"
  ;
  XREF  aescall,vdicall
- XREF  logbase,bildbuff,rec_adr,drawflag,rand_tab
+ XREF  logbase,bildbuff,rec_adr,rand_tab
  XREF  show_m,hide_m,save_buf,save_scr,win_rdw,copy_blk,alertbox
  XREF  cent_koo,form_buf,men_inv,over_cut,over_old
  XREF  win_xy,work_blk,form_do,frrotier,frzoomen,frzerren
@@ -73,8 +73,7 @@ fuenf_4c  cmp.b     #$4c,d0
           lea       stack,a4
           bsr       rota_aus
           ;
-          lea       drawflag,a0         enable "undo"
-          move.w    #-1,(a0)
+          move.w    #-1,UNDO_STATE(a6)  ;enable "undo"
           bsr       fram_mod
           moveq.l   #$14,d0
           bsr       men_iena
@@ -137,9 +136,8 @@ zoom32    move.w    d0,d6               D6: height
           bne       men_inv
 zoom34    bsr       over_old
           bsr       save_scr
-          lea       drawflag+4,a0
-          move.l    SEL_FRM_X1Y1(a6),(a0)+
-          move.l    SEL_FRM_X2Y2(a6),(a0)
+          move.l    SEL_FRM_X1Y1(a6),UNDO_SEL_X1Y1(a6)
+          move.l    SEL_FRM_X2Y2(a6),UNDO_SEL_X2Y2(a6)
           move.w    d5,SEL_FRM_X2Y2+0(a6)
           move.w    d6,SEL_FRM_X2Y2+2(a6)
           bsr       manu_en2
@@ -149,10 +147,10 @@ zoom3     clr.l     d7                  +++ Manual zoom +++
           bsr       manu_pre
 zoom1     bsr       manu_mak
           bne       zoom4
-          move.w    drawflag+8,d2
-          sub.w     drawflag+4,d2
-          move.w    drawflag+10,d3
-          sub.w     drawflag+6,d3
+          move.w    UNDO_SEL_X2Y2+0(a6),d2
+          sub.w     UNDO_SEL_X1Y1+0(a6),d2
+          move.w    UNDO_SEL_X2Y2+2(a6),d3
+          sub.w     UNDO_SEL_X1Y1+2(a6),d3
           move.w    MOUSE_CUR_XY(a6),d4
           move.w    MOUSE_CUR_XY+2(a6),d5
           move.l    frzoomen+60,d6
@@ -201,13 +199,11 @@ zoom7     move.w    d0,SEL_FRM_X2Y2+0(a6)
 zoom4     bsr       manu_end            +++ Insert new rectangle +++
           cmp.l     #$80008000,18(a4)
           bne.s     zoom35
-          move.l    drawflag+4,SEL_FRM_X1Y1(a6)
-          move.l    drawflag+8,SEL_FRM_X2Y2(a6)
+          move.l    UNDO_SEL_X1Y1(a6),SEL_FRM_X1Y1(a6)
+          move.l    UNDO_SEL_X2Y2(a6),SEL_FRM_X2Y2(a6)
           bra       zoom36
-zoom35    lea       drawflag+4,a2
-          move.l    (a2)+,d0
-          sub.l     d0,(a2)
-          addq.l    #2,a2
+zoom35    move.l    UNDO_SEL_X1Y1(a6),d0
+          sub.l     d0,UNDO_SEL_X2Y2(a6)
           lea       stack,a3
           clr.l     (a3)
           move.l    SEL_FRM_X2Y2(a6),d2
@@ -217,10 +213,9 @@ zoom35    lea       drawflag+4,a2
           clr.w     d3                  clear old rect. pos.
           move.l    BILD_ADR(a4),a0
           bsr       work_bl2
-          lea       drawflag,a0
-          move.w    #-1,(a0)            enable "undo"
-          move.l    4(a0),d0
-          add.l     d0,8(a0)
+          move.w    #-1,UNDO_STATE(a6) ;enable "undo"
+          move.l    UNDO_SEL_X1Y1(a6),d0
+          add.l     d0,UNDO_SEL_X2Y2(a6)
           move.l    bildbuff,a0         Zoom-parameter
           move.l    BILD_ADR(a4),a1
           lea       stack,a4
@@ -266,8 +261,7 @@ zerr1     clr.l     18(a4)
           move.l    #-1,SEL_FRM_X2Y2(a6)
           moveq.l   #$14,d0             enable "undo"
           bsr       men_iena
-          lea       drawflag,a0
-          move.w    #-1,(a0)
+          move.w    #-1,UNDO_STATE(a6)
           bsr       men_inv
           bra       win_rdw
           ;
@@ -288,7 +282,7 @@ fuenf_4f  cmp.b     #$4f,d0
           bra       men_inv
 *--------------------------------------------------------SUB-FUNCTIONS
           ;
-zoom_aus  move.w    drawflag+4,d2       ** Zoom rect. **
+zoom_aus  move.w    UNDO_SEL_X1Y1+0(a6),d2       ** Zoom rect. **
           and.w     #$1f,d2
           move.w    #31,(a4)            { parameters: A0,A1,A4,D0,D1 }
           sub.w     d2,(a4)
@@ -296,11 +290,11 @@ zoom_aus  move.w    drawflag+4,d2       ** Zoom rect. **
           and.w     #$1f,d2
           move.w    #31,2(a4)
           sub.w     d2,2(a4)
-          move.w    drawflag+8,d2       width/height
-          sub.w     drawflag+4,d2
+          move.w    UNDO_SEL_X2Y2+0(a6),d2       width/height
+          sub.w     UNDO_SEL_X1Y1+0(a6),d2
           move.w    d2,4(a4)
-          move.w    drawflag+10,d7
-          sub.w     drawflag+6,d7
+          move.w    UNDO_SEL_X2Y2+2(a6),d7
+          sub.w     UNDO_SEL_X1Y1+2(a6),d7
           move.w    d0,d4               zoom delta and factors
           move.w    d2,d3
           addq.w    #1,d3
@@ -313,10 +307,10 @@ zoom_aus  move.w    drawflag+4,d2       ** Zoom rect. **
           bsr       zoom_div
           move.w    d6,6(a4)
           move.l    d3,14(a4)
-          move.w    drawflag+6,d0         **********************************
+          move.w    UNDO_SEL_X1Y1+2(a6),d0         **********************************
           mulu.w    #80,d0                ** R0/1:  Q/Z-start-bit-no.
           add.l     d0,a0                 ** R2:    width-1
-          move.w    drawflag+4,d0         ** R3/4:  store row/pix factor
+          move.w    UNDO_SEL_X1Y1+0(a6),d0         ** R3/4:  store row/pix factor
           lsr.w     #3,d0                 ** R5/7:  nof. max. zoom delta P/Z
           and.w     #$fc,d0               ** D0/1:  temp.store src/dest-long
           add.w     d0,a0                 ** D2/3:  mask src/dest
@@ -408,10 +402,9 @@ zoom_di2  move.l    #-7000000,d3
           ;
 manu_pre  bsr       over_old            ** Switching screen **
           bsr       save_scr
-          lea       drawflag+4,a0       (D7: Ausspos)
-          move.l    SEL_FRM_X1Y1(a6),(a0)+
+          move.l    SEL_FRM_X1Y1(a6),UNDO_SEL_X1Y1(a6) ;(D7: frm. coords.)
           move.l    d7,SEL_FRM_X1Y1(a6)
-          move.l    SEL_FRM_X2Y2(a6),(a0)
+          move.l    SEL_FRM_X2Y2(a6),UNDO_SEL_X2Y2(a6)
           move.w    #1999,d0
           move.l    bildbuff,a0
 manu_pr1  clr.l     (a0)+
@@ -428,8 +421,8 @@ manu_pr1  clr.l     (a0)+
           move.w    #5,-(sp)
           trap      #14
           add.w     #12,sp
-          move.l    drawflag+4,d0       copy relection rect. onto screen
-          move.l    drawflag+8,d1
+          move.l    UNDO_SEL_X1Y1(a6),d0       copy relection rect. onto screen
+          move.l    UNDO_SEL_X2Y2(a6),d1
           move.l    SEL_FRM_X1Y1(a6),d2
           move.l    BILD_ADR(a4),a0
           move.l    bildbuff,a1
@@ -470,14 +463,14 @@ manu_en2  bsr       save_buf            save old image
           bsr       show_m
           cmp.l     #$80008000,18(a4)   no change?
           beq.s     manu_rts
-          move.l    drawflag+4,d0
-          move.l    drawflag+8,d1
+          move.l    UNDO_SEL_X1Y1(a6),d0
+          move.l    UNDO_SEL_X2Y2(a6),d1
           clr.w     d3                  lear old selection rect
           move.l    BILD_ADR(a4),a0
           bra       work_bl2
           ;
 zerr_aus  jsr       zerr_p1             ** distort rect. **
-          move.w    drawflag+4,d2       start bit no.
+          move.w    UNDO_SEL_X1Y1+0(a6),d2       start bit no.
           and.w     #$1f,d2
           move.w    #31,(a4)
           sub.w     d2,(a4)
@@ -485,15 +478,15 @@ zerr_aus  jsr       zerr_p1             ** distort rect. **
           and.w     #$1f,d2
           move.w    #31,2(a4)
           sub.w     d2,2(a4)
-          move.w    drawflag+8,d2       width/height
-          sub.w     drawflag+4,d2
+          move.w    UNDO_SEL_X2Y2+0(a6),d2       width/height
+          sub.w     UNDO_SEL_X1Y1+0(a6),d2
           move.w    d2,4(a4)
-          move.w    drawflag+10,d7
-          sub.w     drawflag+6,d7
-          move.w    drawflag+6,d0       address
+          move.w    UNDO_SEL_X2Y2+2(a6),d7
+          sub.w     UNDO_SEL_X1Y1+2(a6),d7
+          move.w    UNDO_SEL_X1Y1+2(a6),d0       address
           mulu.w    #80,d0
           add.l     d0,a0
-          move.w    drawflag+4,d0
+          move.w    UNDO_SEL_X1Y1+0(a6),d0
           lsr.w     #3,d0
           and.w     #$fc,d0
           add.w     d0,a0
@@ -535,8 +528,8 @@ zerr12    dbra      d7,zerr13           + end loop within row +
           ;
 zerr_p1   move.w    MOUSE_CUR_XY(a6),d4  ## Slanting ##
           move.w    d4,d0
-          move.w    drawflag+8,d1       new X-pos
-          sub.w     drawflag+4,d1
+          move.w    UNDO_SEL_X2Y2+0(a6),d1       new X-pos
+          sub.w     UNDO_SEL_X1Y1+0(a6),d1
           lsr.w     #1,d1
           sub.w     d1,d0
           move.w    d0,SEL_FRM_X1Y1+0(a6)
@@ -547,8 +540,8 @@ zerr_p1   move.w    MOUSE_CUR_XY(a6),d4  ## Slanting ##
           neg.w     d4
 zerr_p11  lsl.w     #1,d4
           move.w    d3,10(a4)           10: direction
-          move.w    drawflag+10,d3
-          sub.w     drawflag+6,d3
+          move.w    UNDO_SEL_X2Y2+2(a6),d3
+          sub.w     UNDO_SEL_X1Y1+2(a6),d3
           bsr       zoom_div
           add.l     #10000,d3
           move.l    d3,6(a4)
@@ -580,20 +573,20 @@ zerr_d11  add.w     d5,2(a4)            left
           subq.l    #4,a1
 zerr_d1e  rts
           ;
-rota_aus  move.w    drawflag+4,d2       ** Rotation selection **
+rota_aus  move.w    UNDO_SEL_X1Y1+0(a6),d2       ** Rotation selection **
           move.w    d2,d3
           lsr.w     #3,d2               source address
           and.w     #$fc,d2
           add.w     d2,a0
           and.w     #31,d3
           move.w    d3,2(a4)
-          move.w    drawflag+10,d7
-          move.w    drawflag+6,d2
+          move.w    UNDO_SEL_X2Y2+2(a6),d7
+          move.w    UNDO_SEL_X1Y1+2(a6),d2
           sub.w     d2,d7
           mulu.w    #80,d2
           add.l     d2,a0
-          move.w    drawflag+8,d2
-          sub.w     drawflag+4,d2
+          move.w    UNDO_SEL_X2Y2+0(a6),d2
+          sub.w     UNDO_SEL_X1Y1+0(a6),d2
           move.w    d2,(a4)
           move.w    d2,d3               new x1-coord.
           muls.w    d0,d3
@@ -686,9 +679,6 @@ rotate7   add.w     d5,d4
 rotate8   dbra      d7,rotate1
           rts
 *--------------------------------------------------------------STRINGS
-straldbr  dc.b   '[2][Selection area is too wide!|'
-          dc.b   'Select which side to cut off'
-          dc.b   '][Left|Cancel|Right]',0
 stralzoo  dc.b   '[1][Zoom factor was reduced to stay|'
           dc.b   'within maximum image size'
           dc.b   '][Ok|Cancel]',0

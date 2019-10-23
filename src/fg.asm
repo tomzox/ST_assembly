@@ -32,7 +32,7 @@
  ;
  XREF  frmodus,frmuster,frtext,frlinie,frraster,frzeiche
  XREF  chookoo,choofig,chooset,chooras,chootxt,choopat,chooseg
- XREF  rec_adr,drawflag,logbase,bildbuff
+ XREF  rec_adr,logbase,bildbuff
  XREF  copy_blk,save_scr,fram_del,form_do,form_del
  XREF  hide_m,show_m,work_blk,work_bl2,alertbox,pinsel,spdose,gummi
  XREF  punkt,kurve,radier,over_old,over_que,over_beg,mfdb_q,stack
@@ -72,7 +72,7 @@ evt_butt  lea       win_xy,a0           WIN_XY: window coords.
           beq       schub               -> move selection
           bsr       fram_drw
           bra.s     evt_but4
-evt_but5  move.l    drawflag+12,d0      ++ regular tool ++
+evt_but5  move.l    UNDO_BUF_ADDR(a6),d0      ++ regular tool ++
           cmp.l     BILD_ADR(a4),d0
           bne.s     evt_but4
           tst.w     SEL_FLAG_PASTABLE(a6)   ;disable "paste" flag
@@ -81,8 +81,7 @@ evt_but5  move.l    drawflag+12,d0      ++ regular tool ++
           moveq.l   #$44,d0             disable "paste (selection)" menu entry
           bsr       men_idis
 evt_but4  bsr       save_scr
-          lea       drawflag,a0
-          move.w    #$ff00,(a0)
+          move.w    #$ff00,UNDO_STATE(a6)
           lea       last_koo,a0
           clr.w     8(a0)
           move.l    MOUSE_ORIG_XY(a6),d3      D3: mouse X/Y-pos.
@@ -112,7 +111,7 @@ exit_beg  lea       last_koo,a1         + convert coordinates to absolute +
           add.w     d1,(a1)
 exit2     add.w     d0,6(a1)
           add.w     d1,4(a1)
-exit1     move.b    drawflag,d0
+exit1     tst.b     UNDO_STATE(a6)
           beq.s     exit6
           move.l    rec_adr,a0          abs window?
           move.w    SCHIEBER(a0),d0     -> no backup needed
@@ -138,7 +137,7 @@ exit6     bsr       show_m
 exit7     tst.b     MOUSE_LBUT+1(a6)    wait for mouse button to be released
           bne       exit7
           clr.w     MOUSE_LBUT(a6)
-exit_rts  rts
+          rts
           ;
 donot     move.w    #-1,MOUSE_LBUT+2(a6)   mouse click unhandled
           rts
@@ -161,8 +160,7 @@ tool_func_table:
           dc.w     kurve-tool_func_table
           ;
 *---------------------------------------------------GRAPHICS-FUNCTIONS
-pospe     lea       drawflag,a0         *** Save position ***
-          clr.w     (a0)
+pospe     clr.w     UNDO_STATE(a6)      *** Save position ***
           move.l    rec_adr,a0
           add.w     YX_OFF(a0),d3
           add.l     YX_OFF+2(a0),d3
@@ -494,8 +492,7 @@ markier   move.b    SEL_OPT_OVERLAY(a6),d0   *** Start new selection ***
           beq.s     markier6
           addq.l    #4,sp
           bra       exit3
-markier6  lea       drawflag,a0         disable "undo"
-          clr.w     (a0)
+markier6  clr.w     UNDO_STATE(a6)      disable "undo"
           tst.w     d4
           bne.s     markier4
           clr.b     SEL_STATE(a6)       --- only delete borders ---
@@ -847,6 +844,17 @@ text_at1  move.w    d0,6(a2)            line height
           bsr       set_wrmo
           bra       clip_on
           ;
+***************************************************************************
+*  stack frame:
+*        0: prev. mouse coords. (i.e. at time of starting to drag mouse)
+*        4: cur selection frame coords.
+*        8: selection width
+*       12: borders deleted?
+*       16: background source address
+*       20: selection image source
+*       24: source coord. X1Y1
+*       28: source coord. X2Y2
+***************************************************************************
 schub     move.b    SEL_CUR_COMB(a6),d7  ;*** Move selection ***
           bsr       over_old
           move.b    d7,SEL_CUR_COMB(a6)
@@ -858,18 +866,17 @@ schub     move.b    SEL_CUR_COMB(a6),d7  ;*** Move selection ***
           clr.b     SEL_FLAG_DEL(a6)
           clr.w     d3
           move.l    bildbuff,a0
-          move.l    drawflag+4,d0
-          move.l    drawflag+8,d1
+          move.l    UNDO_SEL_X1Y1(a6),d0
+          move.l    UNDO_SEL_X2Y2(a6),d1
           bsr       work_bl2
 schub1    lea       stack,a3            + set parameters +
           move.l    SEL_FRM_X1Y1(a6),d0
           move.l    SEL_FRM_X2Y2(a6),d1
-          lea       drawflag+4,a1
-          move.l    d0,(a1)+            store prev. border coords.
-          move.l    d1,(a1)
+          move.l    d0,UNDO_SEL_X1Y1(a6)
+          move.l    d1,UNDO_SEL_X2Y2(a6)
           move.l    d0,d2
           move.l    d1,d3
-          tst.b     SEL_FLAG_CUTOFF(a6) restore cut-off?
+          tst.b     SEL_FLAG_CUTOFF(a6)   ;restore cut-off?
           bpl.s     schub7
           move.b    SEL_OPT_OVERLAY(a6),d4
           beq.s     schub7
@@ -911,8 +918,8 @@ schub9    move.l    bildbuff,16(a3)     + NORM-Mode +
           bne.s     schub4
           clr.w     d3
           move.l    bildbuff,a0
-          move.l    drawflag+4,d0
-          move.l    drawflag+8,d1
+          move.l    UNDO_SEL_X1Y1(a6),d0
+          move.l    UNDO_SEL_X2Y2(a6),d1
           bsr       work_bl2
 schub4    move.b    SEL_OPT_COMB(a6),d0    + changed combination mode? +
           cmp.b     SEL_CUR_COMB(a6),d0
@@ -920,6 +927,7 @@ schub4    move.b    SEL_OPT_COMB(a6),d0    + changed combination mode? +
           move.l    stack,d3            -> draw immediately
           bsr       hide_m
           bra.s     schub8
+          ;
 schub2    lea       stack,a3            +++ Loop +++
           move.l    (a3),d3
           bsr       noch_qu
@@ -952,6 +960,7 @@ schub8    move.l    d3,-(sp)            ++ Restore ++
           bsr       fram_ins            commit selection
           bsr       show_m
           bra       schub2
+          ;
 schub3    move.l    rec_adr,a2          +++ End +++
           move.b    SEL_OPT_OVERLAY(a6),d0
           bne.s     schub20
@@ -1009,8 +1018,7 @@ schub21   ;                             + set flags +
           clr.w     SEL_FLAG_PASTABLE(a6)   pasting done
           move.b    stack+12,d0
           beq       exit6
-          lea       drawflag,a1         enable undo
-          move.w    #-1,(a1)
+          move.w    #-1,UNDO_STATE(a6)  enable undo
           tst.b     SEL_OPT_OVERLAY(a6)
           beq       exit_beg
           move.b    SEL_OPT_COMB(a6),SEL_CUR_COMB(a6)  store combination mode
@@ -1159,7 +1167,7 @@ save_bu1  move.l    (a1)+,(a2)+
           dbra      d0,save_bu1
           rts
           ;
-fram_ins  lea       stack+4,a3          ** Draw selection border frame **
+fram_ins  lea       stack+4,a3          ** Copy selection content into image **
           move.l    (a3),d0
           move.l    d0,d1
           add.w     6(a3),d1
