@@ -1,7 +1,7 @@
- section eins ;                                          E I . A S M  
- title    EI: Befehlsinterpreter fr Macro+Zeileneditor in CLI-EDIT
- pagelen  32767
- pagewid  133
+ ;section eins ;                                          E I . A S M
+ ;title    EI: Befehlsinterpreter fr Macro+Zeileneditor in CLI-EDIT
+ ;pagelen  32767
+ ;pagewid  133
  ;
  XREF befehle,blank,breakvor,buff12,buff80,buffzeil,check,chkstep
  XREF chkwith,copycom,creaflag,curradr,currlin,dellins,dezaus2,dezausw
@@ -11,7 +11,8 @@
  XREF lprtflag,macros,memtop,modeflag,newline,nocomhre,nospezi,getfiln
  XREF readlin0,readnum,repldata,runflag,savestr,setpat,syntax,tabelle
  XREF tabs,tabswid,testflag,wromaker,zeilaus,dezausl,saveflag
- XREF funkbase,textbase
+ XREF textbase
+ ;XREF funkbase
  ;
  XDEF fodcom,nospequ
           ;
@@ -396,7 +397,7 @@ find13    cmp.b     (a2)+,d2
           dbra      d0,find11
           move.b    repldata,d0         REPLACE-Modus ?
           beq       list14
-          bsr.s     replace3
+          bsr       replace3
 find12    addq.l    #1,d3
           dbra      d1,find10
           bra       find4
@@ -870,7 +871,7 @@ load24    swap      d3
           add.l     #$10000,d3          Zeile l„nger
           cmp.b     #39,d0
           bne.s     load25
-          bsr.s     loadsav             Hochkomma -> weiteres anh„ngen
+          bsr       loadsav             Hochkomma -> weiteres anh„ngen
           move.b    #39,(a1)+
           add.l     #$10000,d3
 load25    subq.b    #1,d3               Buffer krzer
@@ -929,7 +930,7 @@ loadsav1  move.l    a2,d0               genug Speicher reserviert ?
           add.l     d2,d0
           cmp.l     d1,d0               Dateil„nge < ben”tigter Platz ?
           blo.s     loadsav4            ja    : ben”tigte L„nge
-          move.l    d0,d1               sonst : Dateil„nge 
+          move.l    d0,d1               sonst : Dateil„nge
 loadsav4  sub.l     #$00000000,d1       - noch vorhandener Platz
           btst      #0,d1               = anzufordernd.L„nge=ungerade?
           beq.s     loadsav3
@@ -1223,7 +1224,7 @@ test      subq.b    #1,d0
           rts
           ;                             ...und dann Run ausfhren
 create    subq.b    #1,d0
-          bne.s     settab
+          bne       settab
           bsr       getfiln             * Create *
           lea       buffzeil+8,a2
           clr.b     (a2)                Flag: Spec vorhanden ?
@@ -1372,4 +1373,5 @@ modrestr  dc.b      ' Modifikationen vorgenommen',0
 modmostr  dc.b      ' Zeilen wurden verschoben',0
 modcostr  dc.b      ' Zeilen wurden kopiert',0
           ;
+          align     2
           END

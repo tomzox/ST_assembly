@@ -1,7 +1,7 @@
- section eins ;                                            E . A S M  
- title    E : Shell fÅr 4 Editoren und Command-Line-Interpreter
- pagelen   32767
- pagewid   133
+ ;section eins ;                                            E . A S M
+ ;title    E : Shell fÅr 4 Editoren und Command-Line-Interpreter
+ ;pagelen   32767
+ ;pagewid   133
  ;
  XREF alarm1,alarm3,alarmtim,almonstr,blank,buff80,buffzeil,creaflag
  XREF curradr,fodcom,gemdoser,getstr4,lastdrv,modeflag,readline
@@ -164,10 +164,10 @@ editor    cmp.w     #32,d0              normales ASCII-Zeichen ?
           move.l    a5,a2
           moveq.l   #78,d0              max. Anz.zu verschieb. Bytes
           sub.b     d7,d0               - Cursorspaltenposition
-          bmi.s     delete2             < 0 -> in letzter Spalte -> kein Verschieben
+          bmi.s     delchr2             < 0 -> in letzter Spalte -> kein Verschieben
           move.l    d0,d4
-delete1   move.b    1(a2),(a2)+         im Bildschirmsp. verschieben
-          dbra      d0,delete1
+delchr1   move.b    1(a2),(a2)+         im Bildschirmsp. verschieben
+          dbra      d0,delchr1
           move.b    #' ',(a2)
           move.l    logbase,a0          A0: Bildursprung (0/0)
           move.l    d7,d0
@@ -176,15 +176,15 @@ delete1   move.b    1(a2),(a2)+         im Bildschirmsp. verschieben
           add.l     d0,a0               ... plus Y-Off * 1280 (=80*16)
           add.w     d7,a0               ... plus X-Off
           moveq.l   #15,d1
-delete3   move.l    d4,d0
+delchr3   move.l    d4,d0
           move.l    a0,a1
-delete4   move.b    1(a0),(a0)+         Verschieben am Bildschirm
-          dbra      d0,delete4
+delchr4   move.b    1(a0),(a0)+         Verschieben am Bildschirm
+          dbra      d0,delchr4
           clr.b     (a0)                Letzte Spalte lîschen
           lea       80(a1),a0
-          dbra      d1,delete3
+          dbra      d1,delchr3
           rts
-delete2   move.b    #' ',(a5)         - In der letzten Spalte -
+delchr2   move.b    #' ',(a5)         - In der letzten Spalte -
           moveq.l   #'K',d0
           bra       escaus              -> nur lîschen
           ;
@@ -704,7 +704,7 @@ zeilaus   move.l    a0,-(sp)            * Zeile auf Bildschirm *
           trap      #1                  ;print_line
           addq.l    #6,sp
           rts
-escstr    dc.b      27,'#',0
+escstr    dc.b      27,'#',0,0
           ;
 print     move.b    d0,(a5)+            * Zeichen speichen *
           cmp.b     #79,d7              ganz rechts in der Zeile ?
@@ -1098,8 +1098,12 @@ keiversc  dc.b      'Rekursive Funktionsverschachtelung - Abbruch',0
 tabs      dc.b      0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0
           dc.b      0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
 funkbuff  dc.w      41,$d,$a,39,$4b00,$4b00,$4b00,$1c0d,0,0,0,0,0,0,0
-          dc.w      $6200,$4700,'xLxIxSxTx xPx2x2x-xC',$1c0d,0
-          dc.w      $6200,$4700,'xLxIxSxTx xCx-xNx2x2',$1c0d,0
+          dc.w      $6200,$4700
+          dc.b      'xLxIxSxTx xPx2x2x-xC'
+          dc.w      $1c0d,0
+          dc.w      $6200,$4700
+          dc.b      'xLxIxSxTx xCx-xNx2x2'
+          dc.w      $1c0d,0
 funkdata  dc.w      0,0  ;Flags gedr.F-Tasten/Verschachtelungstiefe
 *-----------------------------------------------------------------------ADRESSEN---
 memtop    ds.l      1
@@ -1119,4 +1123,5 @@ tabelle   dc.b      000,164,165,167,166,239,239,239,008,009,010,011,012,013,014,
           dc.b      032,188,032,032,032,032,191,032,198,198,032,032,032,032,032,032
 tabelle2  dc.b      148,215,225,217,154,211,153,210,132,214,129,216,142,209,221,201,158,217
           ;
+          align     2
           END

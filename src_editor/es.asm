@@ -1,7 +1,7 @@
- section eins ;                                          E S . A S M  
- title    ES: Command-Line-Interpreter fÅr CLI-EDIT
- pagelen  32767
- pagewid  133
+ ;section eins ;                                          E S . A S M
+ ;title    ES: Command-Line-Interpreter fÅr CLI-EDIT
+ ;pagelen  32767
+ ;pagewid  133
  ;
  XREF dezaus2,dezaus,dezausl,dolinkom,dolinsyn,escaus,memtop,newline
  XREF nospequ,print3,readdez,readnum,setcurs,syntax,zeilaus,dezausw
@@ -360,8 +360,9 @@ dirline   cmp.w     #70,d7              -- Cursor auf Position --
           bra       escaus
 dirstr1   dc.b      'A:'
 dirstr    dc.b      '*.*',0
-diratt    dc.b      0,0,0,'LAP'       Attribute Long/All/Paged
-dirnum    dc.b      0                   Anz ausgegeb.Zeilen
+diratt    dc.b      0,0,0,'LAP'         ; Attribute Long/All/Paged
+dirnum    dc.b      0                   ; Anz ausgegeb.Zeilen
+          dc.b      0                   ; filler for word-alignment
           ;
 mkdir     subq.b    #1,d0
           bne.s     eradir
