@@ -33,7 +33,7 @@
  XREF  aescall,vdicall
  XREF  logbase,bildbuff,rec_adr,rand_tab
  XREF  show_m,hide_m,save_buf,save_scr,win_rdw,copy_blk,alertbox
- XREF  cent_koo,form_buf,men_inv,over_cut,over_old
+ XREF  cent_koo,form_buf,over_cut,over_old
  XREF  work_blk,form_do,frrotier,frzoomen,frzerren
  XREF  work_bl2,form_del
  ;
@@ -47,17 +47,17 @@
 **********************************************************************
 
 *-------------------------------------------------MENU-HANDLER(cntd.)
-fuenf_4c  cmp.b     #$4c,d0
+fuenf_4c  cmp.b     #MEN_IT_SEL_ROT,d0
           bne       fuenf_4d
           tst.w     SEL_STATE(a6)       --- Rotate ---
-          beq       men_inv
+          beq       evt_menu_rts3
           bsr       over_cut
           lea       frrotier,a2
           moveq.l   #18,d2
           bsr       form_do
           bsr       form_del
           cmp.b     #14,d4              cancel?
-          beq       men_inv
+          beq       evt_menu_rts3
           bsr       over_old            +++ Fixed-angle +++
           bsr       save_scr
           bsr       save_buf
@@ -75,24 +75,23 @@ fuenf_4c  cmp.b     #$4c,d0
           ;
           move.w    #-1,UNDO_STATE(a6)  ;enable "undo"
           bsr       fram_mod
-          moveq.l   #$14,d0
+          moveq.l   #MEN_IT_UNDO,d0
           bsr       men_iena
           move.w    #$00ff,SEL_FLAG_PASTABLE(a6)   short overlay mode
           move.b    #-1,SEL_FLAG_DEL(a6)          clear old rect. before operation
-          bsr       men_inv
           bra       win_rdw
           ;
-fuenf_4d  cmp.b     #$4d,d0
+fuenf_4d  cmp.b     #MEN_IT_SEL_ZOOM,d0
           bne       fuenf_4e
           tst.w     SEL_STATE(a6)       --- Zoom ---
-          beq       men_inv
+          beq       evt_menu_rts3
           bsr       over_cut
           lea       frzoomen,a2
           moveq.l   #19,d2
           bsr       form_do
           bsr       form_del
           cmp.b     #14,d4
-          beq       men_inv
+          beq       evt_menu_rts3
           move.b    frzoomen+65,d0      manually?
           beq       zoom3
           lea       stack,a3            +++ Fixed-factor zoom +++
@@ -133,7 +132,7 @@ zoom32    move.w    d0,d6               D6: height
           lea       stralzoo,a0
           bsr       alertbox
           cmp.b     #1,d0
-          bne       men_inv
+          bne       evt_menu_rts3
 zoom34    bsr       over_old
           bsr       save_scr
           move.l    SEL_FRM_X1Y1(a6),UNDO_SEL_X1Y1(a6)
@@ -223,24 +222,23 @@ zoom35    move.l    UNDO_SEL_X1Y1(a6),d0
           move.w    20(a4),d1
           bsr       zoom_aus            zoom rect.
           move.l    rec_adr,a4
-          moveq.l   #$14,d0             enable "undo"
+          moveq.l   #MEN_IT_UNDO,d0     enable "undo"
           bsr       men_iena
           move.w    #$00ff,SEL_FLAG_PASTABLE(a6)
           move.b    #-1,SEL_FLAG_DEL(a6)
-zoom36    bsr       men_inv
-          bra       win_rdw
+zoom36    bra       win_rdw
           ;
-fuenf_4e  cmp.b     #$4e,d0
+fuenf_4e  cmp.b     #MEN_IT_SEL_DIST,d0
           bne       fuenf_4f
           tst.w     SEL_STATE(a6)       --- Distortion ---
-          beq       men_inv
+          beq       evt_menu_rts3
           bsr       over_cut
           lea       frzerren,a2
           moveq.l   #20,d2
           bsr       form_do
           bsr       form_del
           cmp.b     #17,d4
-          beq       men_inv
+          beq       evt_menu_rts3
           move.l    #$27f018f,d7        D7: centered pos.
           sub.l     SEL_FRM_X2Y2(a6),d7
           add.l     SEL_FRM_X1Y1(a6),d7
@@ -259,27 +257,27 @@ zerr1     clr.l     18(a4)
           clr.w     SEL_STATE(a6)       reset selection state
           move.l    #-1,SEL_FRM_X1Y1(a6)
           move.l    #-1,SEL_FRM_X2Y2(a6)
-          moveq.l   #$14,d0             enable "undo"
+          moveq.l   #MEN_IT_UNDO,d0     enable "undo"
           bsr       men_iena
           move.w    #-1,UNDO_STATE(a6)
-          bsr       men_inv
           bra       win_rdw
           ;
-fuenf_4f  cmp.b     #$4f,d0
-          bne       men_inv
+fuenf_4f  cmp.b     #MEN_IT_SEL_PROJ,d0
+          bne       evt_menu_rts3
           tst.w     SEL_STATE(a6)       --- Projection ---
-          beq       men_inv
+          beq       evt_menu_rts3
           bsr       over_cut
           lea       frprojek,a2
           moveq.l   #21,d2
           bsr       form_do
           bsr       form_del
           cmp.b     #14,d4
-          beq       men_inv
+          beq       evt_menu_rts3
           bsr       over_old
           bsr       save_scr
           bsr       save_buf
-          bra       men_inv
+evt_menu_rts3:
+          rts
 *--------------------------------------------------------SUB-FUNCTIONS
           ;
 zoom_aus  move.w    UNDO_SEL_X1Y1+0(a6),d2       ** Zoom rect. **

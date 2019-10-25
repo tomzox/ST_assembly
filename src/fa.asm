@@ -116,7 +116,7 @@
           moveq.l   #1,d0
           bsr       alertbox
           bra       mainrts             exit
-getdir3   clr.w     d1                  Get address of menu object tree
+getdir3   moveq.l   #RSC_MENU,d1        Get address of menu object tree
           bsr       rsrc_gad
           lea       menu_adr,a0
           move.l    ADDROUT(a6),(a0)
@@ -144,7 +144,7 @@ getdir2   move.b    (a0)+,(a2)+
           lea       logbase,a0
           move.l    d0,(a0)
           bsr       hide_m              ;hide_mouse
-          moveq.l   #16,d1
+          moveq.l   #RSC_DESKTOP,d1
           bsr       rsrc_gad
           move.l    ADDROUT(a6),a3
           aes       104 2 5 0 0 0 4     ;wind_get
@@ -199,11 +199,16 @@ evt_mul2  tst.b     MOUSE_LBUT+1(a6)    menu selection -> ignore
           bne       evt_multi
           clr.w     MOUSE_LBUT(a6)
           bra       evt_multi
-evt_mul1  pea       evt_multi           push handler address to stack -> "rts" returns to loop
-          move.l    rec_adr,a4
+          ;
+evt_mul1  move.l    rec_adr,a4          --- Message ---
           move.w    msg_buff,d0
           cmp.w     #10,d0              menu item selected?
-          beq       evt_menu
+          bne.s     evt_mul4
+          bsr       evt_menu
+          aes       33 2 1 1 0 !msg_buff+6 1 !menu_adr  ;menu_tnormal
+          bra       evt_multi
+          ;
+evt_mul4  pea       evt_multi           push handler address to stack -> "rts" returns to loop
 *-------------------------------------------------------WINDOW-HANDLER
           cmp.w     #20,d0
           bne       topped              --- WM_Redraw - Procedure ---
@@ -559,7 +564,7 @@ closed5   move.l    FENSTER(a4),d0
           trap      #1
           addq.l    #6,sp
           clr.b     INFO(a4)
-          moveq.l   #$14,d0             disable "undo" menu entry
+          moveq.l   #MEN_IT_UNDO,d0     disable "undo" menu entry
           bsr       men_idis
           clr.w     UNDO_STATE(a6)
           tst.w     SEL_STATE(a6)       selection ongoing?
@@ -568,7 +573,7 @@ closed5   move.l    FENSTER(a4),d0
           cmp.l     BILD_ADR(a4),d0
           bne.s     closed8
           clr.w     SEL_FLAG_PASTABLE(a6)    yes -> disable paste
-          moveq.l   #$44,d0             disable "paste" menu entry
+          moveq.l   #MEN_IT_SEL_PAST,d0 ;disable "paste" menu entry
           bsr       men_idis
           bra.s     closed8
 closed7   clr.b     SEL_STATE(a6)       delete selection frame (SEL_STATE:=$00ff intentional)
@@ -591,20 +596,20 @@ closed1   add.w     #WIN_STRUCT_SZ,a4
           cmp.w     #6,d0
           blo.s     exec_rts
           move.l    menu_adr,a3         enable accessories
-          add.w     #323,a3
+          add.w     #MEN_IT_ACC0*RSC_OBJ_SZ+11,a3
           moveq.l   #5,d0
 closed4   bclr.b    #3,(a3)
-          add.w     #24,a3
+          add.w     #RSC_OBJ_SZ,a3
           dbra      d0,closed4
 exec_rts  rts
           ;
-closed2   moveq.l   #$16,d0             all windows closed -> disable menu entries
+closed2   moveq.l   #MEN_IT_DISC,d0     all windows closed -> disable menu entries
           bsr       men_idis            disble "discard"
-          moveq.l   #$19,d0             disble "save as"
+          moveq.l   #MEN_IT_SAV_AS,d0   disble "save as"
           bsr       men_idis
-          moveq.l   #$1a,d0             disable "save"
+          moveq.l   #MEN_IT_SAVE,d0     disable "save"
           bsr       men_idis
-          moveq.l   #$1b,d0             disble "print"
+          moveq.l   #MEN_IT_PRINT,d0    disble "print"
           bra       men_idis
           ;
 absmod    move.l    rec_adr,a4          ** Switch into full-screen mode **
@@ -694,7 +699,7 @@ win_rdw   bsr       get_top             ** Redraw screen **
           ;
 prep_men  move.l    BILD_ADR(a4),a0     ** Set State of "Save" menu entry **
           add.w     #32010,a0
-          moveq.l   #$1a,d0             index of "save" menu entry
+          moveq.l   #MEN_IT_SAVE,d0     index of "save" menu entry
           tst.b     (a0)                window title set?
           bne       men_iena            yes -> enable "save"
           bra       men_idis            no -> disable "save"
@@ -769,7 +774,7 @@ save_scr  move.w    wi_count,d0         ** Release screen buffer **
 save_sc1  clr.w     UNDO_STATE(a6)      buffer free & move done
           clr.b     SEL_TMP_OVERLAY(a6) short-overlay mode cleared
           clr.b     SEL_FLAG_DEL(a6)    do not delete old border
-          moveq.l   #$14,d0             disable "undo" menu entry
+          moveq.l   #MEN_IT_UNDO,d0     disable "undo" menu entry
           bra       men_idis
           ;
 swap_buf  move.l    bildbuff,a1         ** Swap content of buffers **
@@ -788,11 +793,11 @@ swap_bu1  move.l    (a0),d0
 fram_del  tst.w     SEL_STATE(a6)       ** Stop selection **
           beq       exec_rts
           move.l    menu_adr,a0
-          bclr.b    #3,1643(a0)         enable "paste"
-          add.w     #1667,a0
+          bclr.b    #3,MEN_IT_SEL_PAST*RSC_OBJ_SZ+11(a0) ;enable "paste"
+          add.w     #MEN_IT_SEL_PAST*RSC_OBJ_SZ+11,a0
           moveq.l   #10,d0
 fram_de1  bset.b    #3,(a0)             disable menu entries
-          add.w     #24,a0
+          add.w     #RSC_OBJ_SZ,a0
           dbra      d0,fram_de1
           move.l    rec_adr,a0          store old frame coord.
           move.l    SEL_FRM_X1Y1(a6),UNDO_SEL_X1Y1(a6)

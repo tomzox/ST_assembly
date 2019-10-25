@@ -31,16 +31,16 @@
  include "f_def.s"
  ;
  XREF  aescall,vdicall
- XREF  msg_buff,bildbuff,rec_adr,menu_adr
+ XREF  msg_buff,bildbuff,rec_adr,menu_adr,koanztab
  XREF  show_m,hide_m,save_scr,win_rdw,rsrc_gad,set_xx,drei_chg
  XREF  save_buf,win_abs,choofig,copy_blk,win_xy,koos_mak,alertbox
  XREF  rand_tab,logbase,get_koos,over_que,fram_del,fuenf_4c,koostr1
  ;
  XDEF  chootxt,chooras,choopat,frraster,frinfobo,frsegmen
  XDEF  frkoordi,frmodus,frpunkt,frpinsel,frsprayd,frmuster,frtext
- XDEF  frradier,frlinie,frdrucke,frdatei,nr_vier,men_inv,check_xx
+ XDEF  frradier,frlinie,frdrucke,frdatei,nr_vier,check_xx
  XDEF  work_blk,form_do,form_del,form_buf,form_wrt,frzeiche
- XDEF  chookoo,work_bl2,init_ted,koanztab,maus_neu,over_beg,over_old
+ XDEF  chookoo,work_bl2,init_ted,maus_neu,over_beg,over_old
  XDEF  maus_bne,cent_koo,over_cut,frrotier,frzerren,frzoomen,frprojek
  ;
 **********************************************************************
@@ -53,44 +53,42 @@
 *---------------------------------------------------------------------
 *               A T T R I B U T E S   M E N U
 *---------------------------------------------------------------------
-nr_vier   cmp.l     #$70000,d0
-          bhs       nr_fuenf
-          cmp.b     #$41,d0
+nr_vier   cmp.w     #MEN_TOP_ATTR,d1
+          bne       nr_fuenf
+          cmp.b     #MEN_IT_CFG_MOUS,d0
           blo.s     vier_3f
           lea       choomou,a2          --- Mouse form attribute ---
           not.b     1(a2)
           bsr       maus_neu
           move.l    menu_adr,a1
-          add.w     #1572,a1            A1: address of menu item string
+          add.w     #MEN_IT_CFG_MOUS*RSC_OBJ_SZ+12,a1  ;A1: address of menu item string
           tst.w     (a2)
           beq.s     mausel1
           move.l    (a1),2(a2)          pre-select shape "cross"
           addq.l    #6,a2
           move.l    a2,(a1)
-          bra       men_inv
+          rts
 mausel1   move.l    2(a2),(a1)          pre-select shape "arrow"
-          bra       men_inv
+evt_menu_rts2:
+          rts
           ;
-vier_3f   cmp.b     #$3f,d0
+vier_3f   cmp.b     #MEN_IT_CFG_WIN,d0
           bne.s     vier_33
           moveq.l   #1,d0               --- Window attribute ---
           lea       stralfat,a0
           bsr       alertbox            "not implemented yet"
-          bra       men_inv
+          rts
           ;
-vier_33   sub.b     #47,d0              --- Attribute dialog windows ---
-          cmp.b     #6,d0
-          blo.s     attrib11
-          sub.b     #1,d0
-          cmp.b     #13,d0
-          blo.s     attrib11
-          sub.b     #1,d0
-attrib11  move.w    d0,d2
-          sub.b     #4,d0
-          lsl.w     #1,d0
+vier_33   sub.b     #MEN_IT_CFG_COMB,d0 ;--- Attribute dialog windows ---
+          move.w    d0,d2
+          add.w     #5,d2
+          lsl.w     #2,d0
+          ext.l     d0
           lea       fr_tab,a0           calc. address of the dialog data
+          add.l     d0,a0
           lea       frbase,a2
-          add.w     (a0,d0.w),a2
+          add.w     2(a0),a2
+          move.w    (a0),d2
           bsr       form_do             display the dialog window
 attrib13  cmp.w     (a2),d4             abort button clicked?
           bhs       attrib12
@@ -219,19 +217,19 @@ attrib23  moveq.l   #-1,d1              wait for release of mouse button
           tst.b     MOUSE_LBUT+1(a6)
           dbeq      d1,attrib23+2
           clr.w     MOUSE_LBUT(a6)
-          pea       attrib13
-          bra       form_do2            back to dialog handler
+          bsr       form_do2            back to dialog handler
+          bra       attrib13
           ;
 attrib12  bsr       form_del
-          bra       men_inv
+          rts
           ;
 *---------------------------------------------------------------------
 *               S E L E C T I O N   M E N U
 *---------------------------------------------------------------------
           ;
-nr_fuenf  cmp.l     #$80000,d0
-          bhs       nr_sechs
-          cmp.b     #$43,d0
+nr_fuenf  cmp.w     #MEN_TOP_SEL,d1
+          bne       nr_sechs
+          cmp.b     #MEN_IT_CHK_SEL,d0
           bne.s     fuenf_48
           move.w    d0,d2               --- Selection on/off ---
           tst.b     SEL_OPT_OVERLAY(a6)
@@ -239,20 +237,20 @@ nr_fuenf  cmp.l     #$80000,d0
           bsr       over_alo            allocate buffer for overlay, if not yet done
           tst.b     SEL_OPT_OVERLAY(a6) ;success?
           bne       fuenf_43
-          moveq.l   #$53,d0             uncheck "overlay" menu item
+          moveq.l   #MEN_IT_SEL_OVL,d0  uncheck "overlay" menu item
           clr.w     d1
           bsr       check_xx
-fuenf_43  moveq.l   #$43,d2
+fuenf_43  moveq.l   #MEN_IT_CHK_SEL,d2
           bra       drei_chg
           ;
-fuenf_48  cmp.b     #$48,d0
+fuenf_48  cmp.b     #MEN_IT_SEL_ERA,d0
           blo.s     fuenf_52
-          cmp.b     #$4a,d0
+          cmp.b     #MEN_IT_SEL_INV,d0
           bhi.s     fuenf_52
           tst.w     SEL_STATE(a6)       --- Clear/Fill black/Invert ---
-          beq       men_inv
+          beq       evt_menu_rts2
           bsr       over_cut
-          sub.b     #$48,d0
+          sub.b     #MEN_IT_SEL_ERA,d0
           lsl.w     #1,d0
           lea       work_dat,a0
           move.w    (a0,d0.w),d3
@@ -265,43 +263,42 @@ white1    bsr       save_scr
           bsr       work_blk            execute raster operation
           move.w    #$ff00,UNDO_STATE(a6)
           bsr       fram_mod
-          moveq.l   #$14,d0
+          moveq.l   #MEN_IT_UNDO,d0     enable "undo" menu entry
           bsr       men_iena
-          bsr       men_inv
           bra       win_rdw
           ;
-fuenf_52  cmp.b     #$52,d0
+fuenf_52  cmp.b     #MEN_IT_SEL_COMB,d0
           bne.s     fuenf_51
           lea       frverknu,a2         --- Combine selection with background ---
           moveq.l   #14,d2
           bsr       form_do
           bsr       form_del
           cmp.w     #17,d4
-          beq       men_inv
+          beq       evt_menu_rts2
           move.b    frverknu+5,d1
           lea       comb_dat,a1
           ext.w     d1
           move.b    (a1,d1.w),SEL_OPT_COMB(a6)
           beq.s     knupf1
           moveq.l   #1,d1
-knupf1    moveq.l   #$52,d0
+knupf1    moveq.l   #MEN_IT_SEL_COMB,d0
           bsr       check_xx
-          bra       men_inv
+          rts
           ;
-fuenf_51  cmp.b     #$51,d0
+fuenf_51  cmp.b     #MEN_IT_SEL_COPY,d0
           bne.s     fuenf_53
           not.b     SEL_OPT_COPY(a6)    --- Copy ---
           move.b    SEL_OPT_COPY(a6),d1
           and.w     #1,d1
           bsr       check_xx
-          bra       men_inv
+          rts
           ;
-fuenf_53  cmp.b     #$53,d0
+fuenf_53  cmp.b     #MEN_IT_SEL_OVL,d0
           bne       fuenf_44
           tst.b     SEL_OPT_OVERLAY(a6) ;--- Toggle Overlay Mode ---
           beq.s     overlay1
           bsr       over_que            ++ Leaving overlay mode ++
-          bne       men_inv
+          bne       evt_menu_rts2
           tst.l     SEL_OV_BUF(a6)
           beq.s     overlay4
           move.l    SEL_OV_BUF(a6),-(sp)
@@ -312,11 +309,11 @@ fuenf_53  cmp.b     #$53,d0
           bne       tos_err
           clr.l     SEL_OV_BUF(a6)
 overlay4  clr.b     SEL_OPT_OVERLAY(a6)
-          moveq.l   #$44,d0             disable "paste (selection)"
+          moveq.l   #MEN_IT_SEL_PAST,d0 ;disable "paste (selection)"
           bsr       men_idis
-          moveq.l   #$45,d0             disable "discard (selection)"
+          moveq.l   #MEN_IT_SEL_DISC,d0 ;disable "discard (selection)"
           bsr       men_idis
-          moveq.l   #$46,d0             disable "commit (selection)"
+          moveq.l   #MEN_IT_SEL_COMI,d0 ;disable "commit (selection)"
           bsr       men_idis
           bra.s     overlay2
           ;
@@ -326,26 +323,24 @@ overlay1  bsr       over_alo            ++ Enable overlay mode: alloc memory ++
           tst.w     SEL_STATE(a6)       Existing selection?
           beq.s     overlay2
           bsr       over_beg
-          moveq.l   #$45,d0             enable "discard (selection)"
+          moveq.l   #MEN_IT_SEL_DISC,d0             enable "discard (selection)"
           bsr       men_iena
-          moveq.l   #$45,d0
-          bsr       men_iena
-overlay2  moveq.l   #$53,d0             check/uncheck menu item
+overlay2  moveq.l   #MEN_IT_SEL_OVL,d0  check/uncheck menu item
           move.b    SEL_OPT_OVERLAY(a6),d1
           and.w     #1,d1
           bsr       check_xx
-          bra       men_inv
+          rts
 overlay3  moveq.l   #1,d0               abort due to memory allocation failure
           lea       stralovn,a0
           bsr       alertbox
-          bra       men_inv
+          rts
           ;
-fuenf_44  cmp.b     #$44,d0
+fuenf_44  cmp.b     #MEN_IT_SEL_PAST,d0
           bne       fuenf_45
           tst.w     SEL_STATE(a6)       --- Paste selection ---
           bne       einfug5
           tst.b     SEL_FLAG_PASTABLE(a6)
-          beq       men_inv
+          beq       evt_menu_rts2
           bsr       save_scr
           bsr       save_buf
           tst.b     SEL_OPT_OVERLAY(a6) ;Overlay mode?
@@ -374,36 +369,36 @@ einfug2   bsr       win_abs             calc window coords.
           bne.s     einfug3
           move.l    bildbuff,a0
 einfug3   bsr       copy_blk
-          move.w    #$43,d2             check "selection"
+          move.w    #MEN_IT_CHK_SEL,d2  check "selection" menu item
           bsr       drei_chg
           move.w    #-1,UNDO_STATE(a6)  ;enable undo
           move.l    #-1,UNDO_SEL_X1Y1(a6)
           move.l    #-1,UNDO_SEL_X2Y2(a6)
-          moveq.l   #$14,d0             enable "undo" menu entry
+          moveq.l   #MEN_IT_UNDO,d0     ;enable "undo" menu entry
           bsr       men_iena
-          moveq.l   #$44,d0
+          moveq.l   #MEN_IT_SEL_PAST,d0
           bsr       men_idis
           tst.b     SEL_OPT_OVERLAY(a6)
           beq.s     einfug4
-          moveq.l   #$45,d0             enable "discard (selection)"
+          moveq.l   #MEN_IT_SEL_DISC,d0 ;enable "discard (selection)"
           bsr       men_iena
           clr.b     SEL_FLAG_CHG(a6)
           clr.b     SEL_FLAG_CUTOFF(a6)
           clr.b     SEL_CUR_COMB(a6)
           clr.b     SEL_PREV_COMB(a6)
-einfug4   move.l    menu_adr,a0
-          add.w     #1739,a0
+einfug4   move.l    menu_adr,a0         ; enable "erase" and following menu entries
+          add.w     #MEN_IT_SEL_ERA*RSC_OBJ_SZ+11,a0
           moveq.l   #7,d0
 einfug1   bclr.b    #3,(a0)
-          add.w     #24,a0
+          add.w     #RSC_OBJ_SZ,a0
           dbra      d0,einfug1
           move.w    #$00ff,SEL_FLAG_PASTABLE(a6)    select paste mode for moving
           bra       win_rdw
 einfug5   ;                             ++ Overlay-Mode-II ++
           tst.b     SEL_OPT_OVERLAY(a6)
-          beq       men_inv
+          beq       evt_menu_rts2
           bsr       over_que
-          bne       men_inv
+          bne       evt_menu_rts2
           tst.b     SEL_CUR_COMB(a6)
           sne.b     SEL_FLAG_CHG(a6)
           move.b    SEL_OPT_COPY(a6),d3
@@ -411,18 +406,18 @@ einfug5   ;                             ++ Overlay-Mode-II ++
           bsr       over_beg            copy selection content into image
           move.b    d3,SEL_OPT_COPY(a6)
           clr.w     UNDO_STATE(a6)
-          moveq.l   #$14,d0             disable "undo"
+          moveq.l   #MEN_IT_UNDO,d0     ;disable "undo"
           bsr       men_idis
-          moveq.l   #$44,d0             disable "paste (selection)"
+          moveq.l   #MEN_IT_SEL_PAST,d0 ;disable "paste (selection)"
           bsr       men_idis
-          bra       men_inv
+          rts
           ;
-fuenf_45  cmp.b     #$45,d0
+fuenf_45  cmp.b     #MEN_IT_SEL_DISC,d0
           bne       fuenf_46
           tst.w     SEL_STATE(a6)       --- Discard selection ---
-          beq       men_inv
+          beq       evt_menu_rts2
           move.b    SEL_OPT_OVERLAY(a6),d0
-          beq       men_inv
+          beq       evt_menu_rts2
           bsr       save_scr
           tst.b     SEL_FLAG_CUTOFF(a6)
           bmi.s     werfweg2
@@ -442,20 +437,19 @@ werfweg3  clr.b     SEL_STATE(a6)
 werfweg1  move.l    (a0)+,(a1)+
           move.l    (a0)+,(a1)+
           dbra      d0,werfweg1
-          moveq.l   #$14,d0             enable "undo"
+          moveq.l   #MEN_IT_UNDO,d0     ;enable "undo"
           bsr       men_iena
-          moveq.l   #$44,d0             disable "paste"
+          moveq.l   #MEN_IT_SEL_PAST,d0 ;disable "paste"
           bsr       men_idis
-          bsr       men_inv
           bra       win_rdw
           ;
-fuenf_46  cmp.b     #$46,d0
+fuenf_46  cmp.b     #MEN_IT_SEL_COMI,d0
           bne       fuenf_4b
           tst.w     SEL_STATE(a6)       --- Commit selection ---
-          beq       men_exit
+          beq       evt_menu_rts2
           tst.b     SEL_OPT_OVERLAY(a6)
-          beq       men_exit
-          moveq.l   #22,d1              + Disable +
+          beq       evt_menu_rts2
+          moveq.l   #RSC_FORM_COMMIT,d1 ;+ Disable +
           bsr       rsrc_gad
           move.l    ADDROUT+0(a6),a3
           clr.w     82(a3)
@@ -481,7 +475,7 @@ ueber2    lea       fruebern,a2         + ask user +
           bsr       form_do
           bsr       form_del
           cmp.b     #6,d4               cancel?
-          beq       men_inv
+          beq.s     ueber5
           subq.b    #2,d4
           btst      #0,d4
           beq.s     ueber3
@@ -490,27 +484,27 @@ ueber3    btst      #1,d4
           beq.s     ueber4
           clr.b     SEL_FLAG_CUTOFF(a6) ;remove clipped part
           clr.w     UNDO_STATE(a6)      and disable "undo"
-          moveq.l   #$14,d0             disable "undo"
+          moveq.l   #MEN_IT_UNDO,d0     disable "undo"
           bsr       men_idis
 ueber4    tst.b     SEL_CUR_COMB(a6)    + keep "commit" enabled? +
-          bne       men_inv
+          bne.s     ueber5
           tst.b     SEL_FLAG_CUTOFF(a6)
-          bne       men_inv
-          moveq.l   #$46,d0             disable "commit"
+          bne.s     ueber5
+          moveq.l   #MEN_IT_SEL_COMI,d0 ;disable "commit"
           bsr       men_idis
-          bra       men_inv
+ueber5    rts
           ;
-fuenf_4b  cmp.b     #$4b,d0
+fuenf_4b  cmp.b     #MEN_IT_SEL_MIRR,d0
           bne       fuenf_4c
           tst.w     SEL_STATE(a6)       --- Mirror selection ---
-          beq       men_inv
+          beq       evt_menu_rts2
           bsr       over_cut
           lea       stralspi,a0
           moveq.l   #2,d0
           bsr       alertbox
           move.w    d0,d4
           cmp.b     #2,d4
-          beq       men_inv
+          beq       evt_menu_rts2
           bsr       over_old
           bsr       save_scr
           bsr       save_buf
@@ -518,7 +512,7 @@ fuenf_4b  cmp.b     #$4b,d0
           bne       spiver
           move.w    SEL_FRM_X2Y2+2(a6),d7    -- mirror at horizontal line --
           sub.w     SEL_FRM_X1Y1+2(a6),d7
-          beq       men_inv
+          beq       evt_menu_rts2
           move.l    bildbuff,a0
           move.l    BILD_ADR(a4),a1
           move.w    SEL_FRM_X1Y1+2(a6),d0
@@ -572,9 +566,8 @@ spihor4   lea       80(a2),a0
           dbra      d7,spihor1
           move.w    #$ff00,UNDO_STATE(a6)  ;enable "undo"
           bsr       fram_mod
-          moveq.l   #$14,d0
+          moveq.l   #MEN_IT_UNDO,d0
           bsr       men_iena
-          bsr       men_inv
           bra       win_rdw
 spihor5   cmp.w     #-1,d4              is width two words?
           beq       spihor3
@@ -582,7 +575,7 @@ spihor5   cmp.w     #-1,d4              is width two words?
           ;
 spiver    move.w    SEL_FRM_X2Y2+0(a6),d1    -- mirror at vertical line --
           cmp.w     SEL_FRM_X1Y1+0(a6),d1
-          bls       men_inv
+          bls       evt_menu_rts2
           move.w    SEL_FRM_X2Y2+2(a6),d7    height
           move.w    SEL_FRM_X1Y1+2(a6),d0
           sub.w     d0,d7
@@ -700,9 +693,8 @@ spiver12  move.l    SEL_FRM_X1Y1(a6),d2    + shift +
           bsr       copy_blk
 spiver10  move.w    #$ff00,UNDO_STATE(a6) ;enable "undo"
           bsr       fram_mod
-          moveq.l   #$14,d0
+          moveq.l   #MEN_IT_UNDO,d0
           bsr       men_iena
-          bsr       men_inv
           bra       win_rdw
 spiver3   cmp.w     #-1,d4
           beq       spiver6
@@ -711,17 +703,19 @@ spiver3   cmp.w     #-1,d4
 *---------------------------------------------------------------------
 *               T O O L S   M E N U
 *---------------------------------------------------------------------
-nr_sechs  cmp.b     #$55,d0
+nr_sechs  cmp.w     #MEN_TOP_TOOLS,d1
+          bne       evt_menu_rts2
+          cmp.b     #MEN_IT_CHK_COOR,d0
           bne.s     sechs_5c
           move.w    d0,d7               --- Command: Store mouse coords. ---
           bsr       over_que
-          bne       men_inv
+          bne       evt_menu_rts2
           move.w    d7,-(sp)
           bsr       fram_del
           move.w    (sp)+,d2
           bra       drei_chg
           ;
-sechs_5c  cmp.b     #$5c,d0
+sechs_5c  cmp.b     #MEN_IT_CFG_GRID,d0
           bne.s     sechs_5a
           moveq.l   #15,d2              --- Command: Configure grid size ---
           lea       frraster,a2
@@ -738,18 +732,18 @@ raster1   move.w    28(a2),d1
           move.w    d1,28(a2)           new offset
           add.w     #14,a2
 raster2   dbra      d2,raster1
-          bra.s     men_inv
+          rts
           ;
-sechs_5a  cmp.b     #$5a,d0
+sechs_5a  cmp.b     #MEN_IT_CHK_GRID,d0
           bne.s     sechs_59
           lea       chooras,a0          --- Enable/disable rastering ---
           move.w    (a0),d1
           eor.b     #1,d1
           move.w    d1,(a0)
           bsr       check_xx
-          bra.s     men_inv
+          rts
           ;
-sechs_59  cmp.b     #$59,d0
+sechs_59  cmp.b     #MEN_IT_SHOW_COO,d0
           bne.s     sechs_56
           lea       chookoo,a0          --- Enable/disable: Show mouse coords. ---
           move.w    (a0),d1
@@ -758,35 +752,34 @@ sechs_59  cmp.b     #$59,d0
           move.w    #$777,2(a0)
           bsr.s     check_xx
           move.w    chookoo,d0
-          bne.s     koozeig1
+          bne       koos_mak            display & rts
+          ;
           pea       koostr1             clear coords. display
           move.w    #9,-(sp)
           trap      #1
           addq.l    #6,sp
-          bra.s     men_inv
-koozeig1  bsr       koos_mak            display
+          rts
           ;
-sechs_56  cmp.b     #$56,d0
-          bne.s     men_inv
+sechs_56  cmp.b     #MEN_IT_COORDS,d0
+          bne.s     sechs_57
           move.w    choofig,d1          --- Coordinates ---
-          cmp.b     #$43,d1
+          cmp.b     #MEN_IT_CHK_SEL,d1
           bne.s     koord1
-          moveq.l   #$27,d1
+          moveq.l   #MEN_IT_RECT,d1
 koord1    lea       koanztab,a0
-          sub.w     #$1f,d1
+          sub.w     #MEN_IT_PENCIL,d1
           clr.l     d2
           move.b    (a0,d1.w),d2        number of coords.
-          beq.s     men_inv
+          beq.s     koord2
           bsr       get_koos            open dialog window
-          cmp.w     #9,d4
-          beq.s     men_inv             cancel
-          nop
-          ; fall-through
+          ;cmp.w     #9,d4
+          ;beq.s     koords              cancel
+koord2    rts
+
+sechs_57  rts                           --- Zoom View ---
+
 *---------------------------------------------------------SUBFUNCTIONS
-men_inv   ;
-          aes       33 2 1 1 0 !msg_buff+6 1 !menu_adr  ;menu_tnormal
-men_exit  rts
-          ;
+
 check_xx  ;
           aes       31 2 1 1 0 !d0 !d1 !menu_adr  ;menu_icheck
           rts                                      D0:index/D1:0-1
@@ -832,9 +825,9 @@ over_cut                                ** "discard clipped selection?" **
           clr.b     SEL_FLAG_CUTOFF(a6)
 over_cu2  rts
 over_cu1  addq.l    #4,sp               no -> abort
-          bra       men_inv
+          rts
           ;
-over_old  move.b    SEL_OPT_OVERLAY(a6),d0           ** undo combination **
+over_old  move.b    SEL_OPT_OVERLAY(a6),d0  ;** undo combination **
           beq       over_ol3
           tst.b     SEL_CUR_COMB(a6)
           beq.s     over_ol1
@@ -856,11 +849,11 @@ over_ol2  move.l    SEL_FRM_X1Y1(a6),d2
 over_ol1  move.b    #-1,SEL_FLAG_CHG(a6)  ; modification done
           move.b    SEL_CUR_COMB(a6),SEL_PREV_COMB(a6)
           clr.b     SEL_CUR_COMB(a6)
-          moveq.l   #$44,d0             enable "paste (selection)"
+          moveq.l   #MEN_IT_SEL_PAST,d0 ;enable "paste (selection)"
           bsr       men_iena
           tst.b     SEL_FLAG_CUTOFF(a6)
           bmi.s     over_ol3
-          moveq.l   #$46,d0             disable "commit"
+          moveq.l   #MEN_IT_SEL_COMI,d0 ;disable "commit"
           bsr       men_idis
 over_ol3  rts
           ;
@@ -872,8 +865,8 @@ over_alo  tst.l     SEL_OV_BUF(a6)      ** Allocate memory for selection overlay
           addq.l    #6,sp
           tst.l     d0
           bmi.s     over_al2
-over_al1  move.b    #$ff,SEL_OPT_OVERLAY(a6)
           move.l    d0,SEL_OV_BUF(a6)
+over_al1  move.b    #$ff,SEL_OPT_OVERLAY(a6)
           rts
 over_al2  clr.b     SEL_OPT_OVERLAY(a6)
           rts
@@ -888,7 +881,7 @@ over_be1  move.l    (a0)+,(a1)+
           move.l    (a0)+,(a1)+
           dbra      d0,over_be1
           tst.b     SEL_OPT_COPY(a6)    copy?
-          bne       men_exit
+          bne       evt_menu_rts2
           move.l    SEL_OV_BUF(a6),a0
           clr.w     d3
           ;
@@ -990,7 +983,7 @@ form_do2  ;
           aes       50 1 1 1 0 0 !a3    ;form_do
           move.w    INTOUT+0(a6),d4     D4: index of exit button
           move.w    d4,d0
-          mulu.w    #24,d0              deselect exit button
+          mulu.w    #RSC_OBJ_SZ,d0              deselect exit button
           bclr      #0,11(a3,d0.l)
           move.w    (a2)+,d0
           addq.w    #1,d0
@@ -1043,13 +1036,13 @@ form_tk1  move.w    form_buf,d0
 form_tk2  move.b    (a2)+,d0            ++ radio-buttons ++
           beq.s     form_tk5
           move.l    a3,a0
-          mulu.w    #24,d0
+          mulu.w    #RSC_OBJ_SZ,d0
           add.l     d0,a0
           clr.b     d0
           move.w    8(a0),d1
 form_tk3  btst.b    #0,11(a0)           search for selected one...
           bne.s     form_tk4
-          add.w     #24,a0
+          add.w     #RSC_OBJ_SZ,a0
           addq.b    #1,d0
           cmp.w     8(a0),d1            ..only within buttons
           beq       form_tk3
@@ -1066,7 +1059,7 @@ form_tk7  btst.b    #0,(a0)
           moveq.l   #5,d2
           sub.b     d0,d2
           bset      d2,d1
-form_tk6  add.w     #24,a0
+form_tk6  add.w     #RSC_OBJ_SZ,a0
           dbra      d0,form_tk7
           lea       chootxt,a0
           move.w    d1,(a0)
@@ -1088,7 +1081,7 @@ form_rw3  addq.l    #2,a2               ++ radio-buttons ++
 form_rw4  clr.w     d0
           move.b    (a2)+,d0
           beq.s     form_rw8
-          mulu.w    #24,d0
+          mulu.w    #RSC_OBJ_SZ,d0
           move.l    a3,a0
           add.l     d0,a0
           clr.b     d0
@@ -1098,7 +1091,7 @@ form_rw5  cmp.b     d0,d1
           move.b    #1,11(a0)
           bra.s     form_rw7
 form_rw6  clr.b     11(a0)
-form_rw7  add.w     #24,a0
+form_rw7  add.w     #RSC_OBJ_SZ,a0
           addq.b    #1,d0
           btst.b    #4,9(a0)
           bne       form_rw5
@@ -1114,7 +1107,7 @@ form_rw9  btst      d0,d1
           bset.b    #0,(a0)
           bra.s     form_rx2
 form_rx1  bclr.b    #0,(a0)
-form_rx2  add.w     #24,a0
+form_rx2  add.w     #RSC_OBJ_SZ,a0
           dbra      d0,form_rw9
 form_rw1  subq.l    #2,a2
           rts
@@ -1252,10 +1245,10 @@ readloop  move.b    (a0)+,d0
 read1     rts
           ;
 init_ted  tst.w     2(a2)               ** set TEDINFO addresses **
-          bmi       men_exit
+          bmi       evt_menu_rts2
           move.l    TED_ADR+2(a2),a0
           cmp.l     #$10,a0
-          bhi       men_exit
+          bhi       evt_menu_rts2
           move.l    a2,-(sp)
           addq.l    #2,a2
 init_te1  moveq.l   #8,d0
@@ -1280,7 +1273,6 @@ choomou   dc.w    0                     ; flag: 0:=normal mouse shape; $ff:cross
 chookoo   dc.w    0                     ; flag: 0:disabled; 1:enable mouse coord. display in menu bar
           dc.w    -1,-1                 ; last written mouse X/Y coords.
 choofil   dcb.w   16,0                  ; bitmasks of user-defined fill pattern
-koanztab  dc.b    1,0,0,1,1,1,0,3,3,3,1,3,3,3
 *--------------------------------------------------------------STRUCTS
 comb_dat  dc.b    0,1,6,7,2,11,4,13,14,9,8
 work_dat  dc.w    0,15,10
@@ -1337,16 +1329,20 @@ frzerren  dc.w  16,32,1,4,15,99,0,0,-1,$400,$800,0
 frprojek  dc.w  13,-1,$400,$800,0
 fruebern  dc.w  05,-1,$300,0
 *- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-fr_tab    dc.w    frmodus-frbase
-          dc.w    frpunkt-frbase
-          dc.w    frpinsel-frbase
-          dc.w    frsprayd-frbase
-          dc.w    frmuster-frbase
-          dc.w    frtext-frbase
-          dc.w    frradier-frbase
-          dc.w    frlinie-frbase
-          dc.w    frdrucke-frbase
-          dc.w    frdatei-frbase
+          ; table of attribute forms, indexed by menu entry
+fr_tab    dc.w    RSC_FORM_COMB,frmodus-frbase     ; MEN_IT_CFG_COMB
+          dc.w    -1,-1                            ; menu separator
+          dc.w    RSC_FORM_PENC,frpunkt-frbase     ; MEN_IT_CFG_PENC
+          dc.w    RSC_FORM_BRUSH,frpinsel-frbase   ; MEN_IT_CFG_BRUS
+          dc.w    RSC_FORM_SPRAY,frsprayd-frbase   ; MEN_IT_CFG_SPAY
+          dc.w    RSC_FORM_FILL,frmuster-frbase    ; MEN_IT_CFG_FILL
+          dc.w    RSC_FORM_TEXT,frtext-frbase      ; MEN_IT_CFG_TEXT
+          dc.w    RSC_FORM_ERASER,frradier-frbase  ; MEN_IT_CFG_ERA
+          dc.w    RSC_FORM_LINE,frlinie-frbase     ; MEN_IT_CFG_LINE
+          dc.w    -1,-1                            ; menu separator
+          dc.w    RSC_FORM_PRINT,frdrucke-frbase   ; MEN_IT_CFG_PRT
+          dc.w    RSC_FORM_FILE,frdatei-frbase     ; MEN_IT_CFG_FILE
+          dc.w    -1                               ; MEN_IT_CFG_WIN
 form_buf  ds.w    4
 *---------------------------------------------------------------------
           align   2

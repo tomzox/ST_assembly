@@ -26,7 +26,9 @@
  ifnd __F_DEF_S
 __F_DEF_S equ 1
 
-;----------------- *** Offsets to data section (A6) *** ----------------------
+;-----------------------------------------------------------------------------
+;                       *** Offsets to data section "dsect_a6" ***
+;-----------------------------------------------------------------------------
                ;        *** Interface to AES/VDI (aescall, vdicall) ***
 GRHANDLE       equ   0   ; ds.w
 APPL_ID        equ   2   ; ds.w
@@ -82,9 +84,10 @@ UNDO_BUF_ADDR     equ  408  ; +12 dc.l ; #$12345678 for undo of shape draw,
                   ;                ; or copy of selection buffer "BILD_ADR(a4)"
 
 DSECT_SZ          equ  412  ; total size of data section managed via A6
+
 ;-----------------------------------------------------------------------------
-          ;
           ;        *** Offsets within window struct ("wi1") ***
+
 WIN_HNDL  equ  0    ; window handle or -1 if window not open
 BILD_ADR  equ  2    ; Address of image buffer
 INFO      equ  6    ; 0:open/1:change/2:virgin/3:was already changed
@@ -104,6 +107,111 @@ TED_VAL   equ  4    ; current, valid value
 TED_MIN   equ  6    ; Minimum
 TED_INX   equ  7    ; Index in object tree
 TED_MAX   equ  8    ; Maximum
-TED_ADR   equ  10   ; Address of TEDINFO struct
+TED_ADR   equ  10   ; Address of AES "struct text_edinfo"
+
+;-----------------------------------------------------------------------------
+;                             *** Constants for resources ***
+;-----------------------------------------------------------------------------
+RSC_OBJ_SZ      equ  24         ; size of AES "struct object"
+
+RSC_MENU        equ   0         ; menu object tree
+RSC_FORM_ABOUT  equ   1
+RSC_FORM_SEGMT  equ   2
+RSC_FORM_COORD  equ   3
+RSC_FORM_COMB   equ   4         ; attribute dialogs...
+RSC_FORM_PENC   equ   5
+RSC_FORM_BRUSH  equ   6
+RSC_FORM_SPRAY  equ   7
+RSC_FORM_FILL   equ   8
+RSC_FORM_TEXT   equ   9
+RSC_FORM_ERASER equ  10
+RSC_FORM_LINE   equ  11
+RSC_FORM_PRINT  equ  12
+RSC_FORM_FILE   equ  13
+RSC_FORM_SELCMB equ  14
+RSC_FORM_GRID   equ  15
+RSC_DESKTOP     equ  16         ; desktop background & image
+RSC_FORM_CHAR   equ  17
+RSC_FORM_ROTATE equ  18         ; selection operations...
+RSC_FORM_ZOOM   equ  19
+RSC_FORM_DISTRT equ  20
+RSC_FORM_PROJ   equ  21
+RSC_FORM_COMMIT equ  22
+
+                ;             *** Constants for menu tree ***
+MEN_TOP_DESK    equ   3         ; top-level menus
+MEN_TOP_FILE    equ   4
+MEN_TOP_SHAPE   equ   5
+MEN_TOP_ATTR    equ   6
+MEN_TOP_SEL     equ   7
+MEN_TOP_TOOLS   equ   8
+
+MEN_IT_ABOUT    equ  $b         ; DESK menu entries
+MEN_IT_ACC0     equ  $d
+
+MEN_IT_UNDO     equ $14         ; FILE menu entries
+MEN_IT_DISC     equ $16
+MEN_IT_NEW      equ $17
+MEN_IT_LOAD     equ $18
+MEN_IT_SAV_AS   equ $19
+MEN_IT_SAVE     equ $1a
+MEN_IT_PRINT    equ $1b
+MEN_IT_QUIT     equ $1d
+
+MEN_IT_PENCIL   equ $1f         ; SHAPES menu entries
+MEN_IT_BRUSH    equ $20
+MEN_IT_SPRAY    equ $21
+MEN_IT_FLFILL   equ $22
+MEN_IT_TEXT     equ $23
+MEN_IT_ERASER   equ $24
+MEN_IT_RUBBND   equ $25
+MEN_IT_LINE     equ $26
+MEN_IT_RECT     equ $27
+MEN_IT_SQR      equ $28
+MEN_IT_POLYGN   equ $29
+MEN_IT_CIRCLE   equ $2a
+MEN_IT_ELIPSIS  equ $2b
+MEN_IT_CURVE    equ $2c
+MEN_IT_CHK_FILL equ $2e
+MEN_IT_CHK_RND  equ $2f
+MEN_IT_CHK_BRD  equ $30
+MEN_IT_ARC_SEG  equ $31
+
+MEN_IT_CFG_COMB equ $33         ; ATTRIBUTES menu entries
+MEN_IT_CFG_PENC equ $35
+MEN_IT_CFG_BRUS equ $36
+MEN_IT_CFG_SPRY equ $37
+MEN_IT_CFG_FILL equ $38
+MEN_IT_CFG_TEXT equ $39
+MEN_IT_CFG_ERA  equ $3a
+MEN_IT_CFG_LINE equ $3b
+MEN_IT_CFG_PRT  equ $3d
+MEN_IT_CFG_FILE equ $3e
+MEN_IT_CFG_WIN  equ $3f
+MEN_IT_CFG_MOUS equ $41
+
+MEN_IT_CHK_SEL  equ $43         ; SELECTION menu entries
+MEN_IT_SEL_PAST equ $44
+MEN_IT_SEL_DISC equ $45
+MEN_IT_SEL_COMI equ $46
+MEN_IT_SEL_ERA  equ $48
+MEN_IT_SEL_BLCK equ $49
+MEN_IT_SEL_INV  equ $4a
+MEN_IT_SEL_MIRR equ $4b
+MEN_IT_SEL_ROT  equ $4c
+MEN_IT_SEL_ZOOM equ $4d
+MEN_IT_SEL_DIST equ $4e
+MEN_IT_SEL_PROJ equ $4f
+MEN_IT_SEL_COPY equ $51
+MEN_IT_SEL_COMB equ $52
+MEN_IT_SEL_OVL  equ $53
+
+MEN_IT_CHK_COOR equ $55         ; TOOLS menu entries
+MEN_IT_COORDS   equ $56
+MEN_IT_VIEW_ZOM equ $57
+MEN_IT_SHOW_COO equ $59
+MEN_IT_CHK_GRID equ $5a
+MEN_IT_CFG_GRID equ $5c
+
 
  endif /* __F_DEF_S */

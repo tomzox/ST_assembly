@@ -40,7 +40,7 @@
  XDEF  evt_butt
  XDEF  win_xy,fram_drw,save_buf,win_abs,noch_qu,return,set_wrmo
  XDEF  koos_mak,clip_on,new_1koo,new_2koo,set_att2,ret_att2
- XDEF  ret_attr,set_attr,fram_ins,last_koo
+ XDEF  ret_attr,set_attr,fram_ins,last_koo,koanztab
 
 **********************************************************************
 *   Global register mapping:
@@ -61,7 +61,7 @@ evt_butt  lea       win_xy,a0           WIN_XY: window coords.
           bsr       noch_in             click into window?
           bne       donot               no -> abort
           move.w    choofig,d2          ++ Selection tool active? ++
-          cmp.w     #$43,d2
+          cmp.w     #MEN_IT_CHK_SEL,d2
           bne.s     evt_but5
           tst.w     SEL_STATE(a6)       selection ongoing?
           beq.s     evt_but4
@@ -78,7 +78,7 @@ evt_but5  move.l    UNDO_BUF_ADDR(a6),d0      ++ regular tool ++
           tst.w     SEL_FLAG_PASTABLE(a6)   ;disable "paste" flag
           beq.s     evt_but4
           clr.w     SEL_FLAG_PASTABLE(a6)
-          moveq.l   #$44,d0             disable "paste (selection)" menu entry
+          moveq.l   #MEN_IT_SEL_PAST,d0 ;disable "paste (selection)" menu entry
           bsr       men_idis
 evt_but4  bsr       save_scr
           move.w    #$ff00,UNDO_STATE(a6)
@@ -87,12 +87,12 @@ evt_but4  bsr       save_scr
           move.l    MOUSE_ORIG_XY(a6),d3      D3: mouse X/Y-pos.
 *- - - - - - - - - - - - - - - - - - - - - - - - - - -GRAPHICS-HANDLER
           move.w    choofig,d0
-          cmp.b     #$55,d0
+          cmp.b     #MEN_IT_CHK_COOR,d0
           beq       pospe               save position
-          cmp.b     #$43,d0
+          cmp.b     #MEN_IT_CHK_SEL,d0
           bne.s     evt_but6
-          moveq.l   #$27,d0             mark selection
-evt_but6  sub.w     #$1f,d0
+          moveq.l   #MEN_IT_RECT,d0     mark selection
+evt_but6  sub.w     #MEN_IT_PENCIL,d0
           lsl.w     #1,d0
           lea       tool_func_table,a0
           move.w    (a0,d0.w),d0
@@ -128,7 +128,7 @@ exit1     tst.b     UNDO_STATE(a6)
           move.l    BILD_ADR(a1),a1     ...into image buffer
           bsr       copy_blk
           ;
-exit3     moveq.l   #$14,d0             enable "undo" menu entry
+exit3     moveq.l   #MEN_IT_UNDO,d0     ;enable "undo" menu entry
           bsr       men_iena
           tst.w     SEL_STATE(a6)       selection ongoing?
           beq.s     exit6
@@ -158,6 +158,10 @@ tool_func_table:
           dc.w     kreis-tool_func_table
           dc.w     kreis-tool_func_table
           dc.w     kurve-tool_func_table
+          ;
+          ;                             Number of coordinates required by shapes
+          ;                             table is indexed by SHAPE menu entry index (-MEN_IT_PENCIL)
+koanztab  dc.b     1,0,0,1,1,1,0,3,3,3,1,3,3,3
           ;
 *---------------------------------------------------GRAPHICS-FUNCTIONS
 pospe     clr.w     UNDO_STATE(a6)      *** Save position ***
@@ -194,7 +198,7 @@ linie3    tst.b     MOUSE_LBUT+1(a6)    mouse button released? -> exit loop
 linie1    tst.l     d4                  mouse moved at all?
           bmi.s     linie4
           move.w    choofig,d0
-          cmp.w     #$29,d0             polygon?
+          cmp.w     #MEN_IT_POLYGN,d0   polygon?
           beq.s     vieleck
 linie4    bsr       set_att2            --- finalize line ---
           move.l    frlinie+46,d0
@@ -398,7 +402,7 @@ quadrat5  tst.b     MOUSE_LBUT+1(a6)    mouse button still pressed?
           move.l    d3,d4               D4: X-new
           swap      d4
           move.w    choofig,d0          square?
-          cmp.w     #$28,d0
+          cmp.w     #MEN_IT_SQR,d0
           bne.s     quadra10
           move.w    d4,d0               --- select. equal W/H for square ---
           move.w    d5,d1
@@ -431,7 +435,7 @@ quadra10  bsr       quadr_dr
           bsr       show_m
           bra       quadrat1
 quadrat2  move.w    choofig,d0          --- finalize rectangle/square ---
-          cmp.w     #$43,d0             selection?
+          cmp.w     #MEN_IT_CHK_SEL,d0  selection?
           beq       markier
           tst.w     d4                  mouse never moved -> abort
           beq       tool_rts
@@ -521,18 +525,18 @@ markier2  add.w     win_xy+8,d5         convert coords. to abs.
           move.b    SEL_OPT_OVERLAY(a6),d0           overlay mode?
           beq.s     markier7
           bsr       over_beg
-          moveq.l   #$45,d0             enable "discard (selection)" menu entry
+          moveq.l   #MEN_IT_SEL_DISC,d0 ;enable "discard (selection)" menu entry
           bsr       men_iena
           tst.b     SEL_OPT_COPY(a6)    copy mode enabled?
           bne.s     markier5
-          moveq.l   #$44,d0             enable "paste (selection)" menu entry
+          moveq.l   #MEN_IT_SEL_PAST,d0 ;enable "paste (selection)" menu entry
           bsr       men_iena
           bra.s     markier5
-markier7  moveq.l   #$44,d0             copy mode -> disable "paste (selection)" menu entry
+markier7  moveq.l   #MEN_IT_SEL_PAST,d0 ;copy mode -> disable "paste (selection)" menu entry
           bsr       men_idis
-markier5  moveq.l   #7,d2               enable menu commands
+markier5  moveq.l   #7,d2               enable all selection menu commands
 markier3  move.l    d2,d0
-          add.l     #$48,d0
+          add.l     #MEN_IT_SEL_ERA,d0
           bsr       men_iena
           dbra      d2,markier3
           clr.b     SEL_FLAG_PASTABLE(a6)  ;no paste
@@ -574,7 +578,7 @@ kreis4    move.l    d3,d6               D6: X-offset
           not.w     d6
           addq.w    #1,d6
 kreis9    move.w    choofig,d0          Circle?
-          cmp.w     #$2a,d0
+          cmp.w     #MEN_IT_CIRCLE,d0
           bne.s     kreis10
           cmp.w     d6,d7               yes -> choose larger of radius values
           bls.s     kreis10
@@ -601,12 +605,12 @@ kreis3    tst.w     d6                  ---- finalize circle ----
           bne.s     kreis6
           cmp.w     #3600,d2
           beq.s     kreis8              -> circle
-kreis6    cmp.w     #$2b,d3             ellipsis?
+kreis6    cmp.w     #MEN_IT_ELIPSIS,d3  ellipsis?
           beq       kreis12
           move.w    d0,CONTRL+10(a6)    3=pie, 2=arc
           vdi       11 4 2 !d4 !d5 0 0 0 0 !d6 0 !d1 !d2  ;arc/pie
           bra.s     kreis7
-kreis8    cmp.w     #$2b,d3             ellipsis?
+kreis8    cmp.w     #MEN_IT_ELIPSIS,d3  ellipsis?
           beq.s     kreis11
           move.w    #4,CONTRL+10(a6)
           vdi       11 3 0 !d4 !d5 0 0 !d6 0  ;pie of circle
@@ -627,12 +631,12 @@ kreis7    lea       last_koo,a0
           ;
 kreis_k   move.l    chooseg,INTIN+0(a6)  --- circle/ellipsis rubberband ---
           move.w    choofig,d0
-          cmp.w     #$2b,d0
-          beq.s     kreis_e
+          cmp.w     #MEN_IT_ELIPSIS,d0
+          beq.s     kreis_el
           move.w    #2,CONTRL+10(a6)
           vdi       11 4 2 !d4 !d5 0 0 0 0 !d6 0  ;arc (INTIN filled already above)
           rts
-kreis_e   move.w    #6,CONTRL+10(a6)
+kreis_el  move.w    #6,CONTRL+10(a6)
           vdi       11 2 2 !d4 !d5 !d6 !d7  ;elliptical_arc
           rts
           ;
@@ -1005,14 +1009,14 @@ schub26   move.l    (a0)+,(a1)+
           sub.w     d0,SEL_PREV_OFFSET+0(a6)
           move.w    stack+6,d0
           sub.w     d0,SEL_PREV_OFFSET+2(a6)
-          moveq.l   #$46,d0             enable "commit (selection)"
+          moveq.l   #MEN_IT_SEL_COMI,d0 ;enable "commit (selection)"
           bsr       men_iena
           bra.s     schub21
 schub22   move.l    stack+24,SEL_PREV_X1Y1(a6)
           bclr.b    #7,SEL_FLAG_CUTOFF(a6)
           bne.s     schub21
           clr.b     SEL_FLAG_CUTOFF(a6)
-          moveq.l   #$46,d0             disable "commit (selection)"
+          moveq.l   #MEN_IT_SEL_COMI,d0 ;disable "commit (selection)"
           bsr       men_idis
 schub21   ;                             + set flags +
           clr.w     SEL_FLAG_PASTABLE(a6)   pasting done
@@ -1023,7 +1027,7 @@ schub21   ;                             + set flags +
           beq       exit_beg
           move.b    SEL_OPT_COMB(a6),SEL_CUR_COMB(a6)  store combination mode
           beq       exit3
-          moveq.l   #$46,d0             enable "commit (selection)"
+          moveq.l   #MEN_IT_SEL_COMI,d0 ;enable "commit (selection)"
           bsr       men_iena
           bra       exit3
 *----------------------------------------------------GEM-SUBFUNCTIONS

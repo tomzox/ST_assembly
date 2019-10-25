@@ -33,7 +33,7 @@
  XREF  aescall,vdicall,stack
  XREF  msg_buff,bildbuff,wi1,wi_count,rec_adr,menu_adr,nr_vier,win_xy
  XREF  last_koo,rsrc_gad,save_scr,set_xx,win_rdw,form_wrt
- XREF  fram_del,form_do,form_del,men_inv,form_buf
+ XREF  fram_del,form_do,form_del,form_buf
  XREF  frinfobo,frsegmen,frkoordi,frdrucke,frdatei,check_xx,koanztab
  XREF  init_ted,copy_blk,maus_neu,fram_ins,maus_bne
  ;
@@ -47,40 +47,45 @@
 *   a6   Base address of data section
 **********************************************************************
 
+evt_menu  move.w    msg_buff+6,d1       object index of top-level menu
+          move.w    msg_buff+8,d0       object index of selected entry
+          ;
 *---------------------------------------------------------------------
 *               D E S K   M E N U
 *---------------------------------------------------------------------
-evt_menu  move.l    msg_buff+6,d0
-          cmp.l     #$40000,d0
-          bhs.s     nr_zwei
+          cmp.w     #MEN_TOP_DESK,d1
+          bne.s     nr_zwei
+          cmp.b     #MEN_IT_ABOUT,d0
+          bne.s     evt_menu_rts
           moveq.l   #1,d2
           lea       frinfobo,a2
           bsr       form_do             --- Show "About..." dialog ---
-          bsr       form_del
-          bra       men_inv
+          bra       form_del
+evt_menu_rts:
+          rts
           ;
 *---------------------------------------------------------------------
 *               F I L E   M E N U
 *---------------------------------------------------------------------
-nr_zwei   cmp.l     #$50000,d0
-          bhs       nr_drei
-          cmp.b     #$1d,d0
+nr_zwei   cmp.w     #MEN_TOP_FILE,d1
+          bne       nr_drei
+          cmp.b     #MEN_IT_QUIT,d0
           bne       new
           bsr       wind_chg            --- Command: Quit ---
-          bne.s     mainrts3
+          bne.s     quitapp3
           moveq.l   #WIN_STRUCT_CNT-1,d0
           lea       wi1,a0
-mainrts2  btst.b    #1,INFO(a0)         any image modified?
-          bne.s     mainrts3
+quitapp2  btst.b    #1,INFO(a0)         any image modified?
+          bne.s     quitapp3
           add.l     #WIN_STRUCT_SZ,a0
-          dbra      d0,mainrts2
-          bra.s     mainrts1
-mainrts3  moveq.l   #1,d0               yes -> ask for confirmation
+          dbra      d0,quitapp2
+          bra.s     quitapp1
+quitapp3  moveq.l   #1,d0               yes -> ask for confirmation
           lea       stralneu,a0
           bsr       alertbox
           cmp.w     #1,d0               abort unless confirmed
-          bne       men_inv
-mainrts1  ;
+          bne       evt_menu_rts
+quitapp1  ;
           move.l    MOUSE_VEC_BUT(a6),CONTRL+14(a6)
           vdi       125 0 0             ;old button-vector
           move.l    MOUSE_VEC_MOV(a6),CONTRL+14(a6)
@@ -91,7 +96,7 @@ mainrts1  ;
           clr.l     -(sp)               ;term
           trap      #1
           ;
-new       cmp.b     #$16,d0
+new       cmp.b     #MEN_IT_DISC,d0
           bne       zwei_17
           bsr       wind_chg            --- Command: Discard ---
           beq.s     new1
@@ -99,16 +104,16 @@ new       cmp.b     #$16,d0
           lea       stralneu,a0         warning "discard image?"
           bsr       alertbox
           cmp.w     #1,d0
-          bne       men_inv             not confirmed -> abort
+          bne       evt_menu_rts        not confirmed -> abort
 new1      bsr       fram_del
-          moveq.l   #$14,d0             disable "undo"
+          moveq.l   #MEN_IT_UNDO,d0     disable "undo"
           bsr       men_idis
-          moveq.l   #$1a,d0             disable "save"
+          moveq.l   #MEN_IT_SAVE,d0     disable "save"
           bsr       men_idis
           move.l    UNDO_BUF_ADDR(a6),d0
           cmp.l     BILD_ADR(a4),d0
           bne.s     new4
-          moveq.l   #$44,d0             disable "paste (selection)"
+          moveq.l   #MEN_IT_SEL_PAST,d0 ;disable "paste (selection)"
           bsr       men_idis
           clr.w     SEL_FLAG_PASTABLE(a6)
 new4      clr.w     SEL_STATE(a6)
@@ -119,18 +124,16 @@ new4      clr.w     SEL_STATE(a6)
 new2      clr.l     (a0)+               clear window buffer
           clr.l     (a0)+
           dbra      d0,new2
-          bsr       men_inv
           move.l    BILD_ADR(a4),a0     clear window title
           add.w     #32010,a0
           clr.w     (a0)
           bsr       name_xx
           bra       win_rdw
           ;
-zwei_17   cmp.b     #$17,d0
+zwei_17   cmp.b     #MEN_IT_NEW,d0
           bne       zwei_18
           bsr       over_que            --- Command: New ---
-          bne       men_inv
-          pea       men_inv
+          bne       evt_menu_rts
 open      bsr       save_scr            +++ open a new window +++
           bsr       fram_del
           move.w    wi_count,d0
@@ -190,13 +193,13 @@ open6     clr.l     (a0)+
           dbra      d0,open6
           lea       rec_adr,a0
           move.l    a4,(a0)
-          moveq.l   #$16,d0             enable "discard"
+          moveq.l   #MEN_IT_DISC,d0     enable "discard"
           bsr       men_iena
-          moveq.l   #$19,d0             enable "save as"
+          moveq.l   #MEN_IT_SAV_AS,d0   enable "save as"
           bsr       men_iena
-          moveq.l   #$1a,d0             disable "save"
+          moveq.l   #MEN_IT_SAVE,d0     disable "save"
           bsr       men_idis
-          moveq.l   #$1b,d0             enable "print"
+          moveq.l   #MEN_IT_PRINT,d0    enable "print"
           bsr       men_iena
           bsr       koo_chk             disable "Coordinates" if needed
           lea       wi_count,a0
@@ -204,10 +207,10 @@ open6     clr.l     (a0)+
           cmp.w     #7,(a0)             7 windows open?
           blo.s     open7
           move.l    menu_adr,a3         yes -> disable accessories
-          add.w     #323,a3
+          add.w     #MEN_IT_ACC0*RSC_OBJ_SZ+11,a3
           moveq.l   #5,d0
 open8     bset.b    #3,(a3)
-          add.w     #24,a3
+          add.w     #RSC_OBJ_SZ,a3
           dbra      d0,open8
 open7     moveq.l   #8,d0               slider: position 0
           clr.w     d1
@@ -240,16 +243,16 @@ open7     moveq.l   #8,d0               slider: position 0
           clr.b     d0
           rts
           ;
-zwei_18   cmp.b     #$18,d0
+zwei_18   cmp.b     #MEN_IT_LOAD,d0
           bne       zwei_14
           bsr       over_que            --- Command: Load ---
-          bne       men_inv
+          bne       evt_menu_rts
           lea       filename,a0
           clr.b     (a0)
           clr.w     d3
           bsr       itemslct            open item selector
           tst.b     d0
-          bne       men_inv
+          bne       evt_menu_rts
           clr.w     -(sp)               open: mode:read-only
           pea       dta+30
           move.w    #$3d,-(sp)
@@ -353,8 +356,7 @@ load9     move.w    handle,-(sp)        ++ close ++
           addq.l    #4,sp
           bsr       maus_neu
           tst.b     d3
-          bne       men_inv
-          bsr       men_inv
+          bne       evt_menu_rts
           bra       win_rdw
           ;
 load_red  move.l    a2,-(sp)            ++ read data from file ++
@@ -388,9 +390,9 @@ load_op2  bsr       open
           ;
 tos_err   neg.w     d0                  ++ report error ++
           aes       53 1 1 0 0 !d0
-          bra       men_inv
+          rts
           ;
-zwei_14   cmp.b     #$14,d0
+zwei_14   cmp.b     #MEN_IT_UNDO,d0
           bne       zwei_1b
           tst.b     UNDO_STATE(a6)      --- Command: Undo ---
           beq       open_rts
@@ -456,7 +458,6 @@ regen13   move.l    BILD_ADR(a4),a1
           bsr       fram_ins            insert/commit selection
           move.b    stack+12,SEL_OPT_COPY(a6)
           move.l    rec_adr,a4
-          bsr       men_inv
           bra       win_rdw
           ;
 regen10   move.l    bildbuff,a0         ++ NORM-Mode ++
@@ -481,42 +482,41 @@ regen1    move.l    (a0),d0
           bpl.s     regen4
           clr.w     SEL_STATE(a6)       ++ clear window frame ++
           move.l    menu_adr,a2
-          bset.b    #3,1667(a2)         disable "discard" menu entry
+          bset.b    #3,MEN_IT_SEL_PAST*RSC_OBJ_SZ+11(a2)  ;disable "discard" menu entry
           cmp.l     #$12345678,UNDO_BUF_ADDR(a6) ;is pasting allowed?
           beq.s     regen7
           move.l    BILD_ADR(a4),UNDO_BUF_ADDR(a6) ;yes
           move.w    #$ff00,SEL_FLAG_PASTABLE(a6)
-          moveq.l   #$44,d0             enable "paste (selection)" menu entry
+          moveq.l   #MEN_IT_SEL_PAST,d0 ;enable "paste (selection)" menu entry
           bsr       men_iena
 regen7    moveq.l   #7,d2
 regen3    move.l    d2,d0
-          add.l     #$48,d0             disable all selection commands
+          add.l     #MEN_IT_SEL_ERA,d0 ;disable all selection commands
           bsr       men_idis
           dbra      d0,regen3
           bra.s     regen2
 regen4    move.l    menu_adr,a0         ++ Generated frame ++
-          bset.b    #3,1643(a0)
+          bset.b    #3,MEN_IT_SEL_PAST*RSC_OBJ_SZ+11(a0)
           move.b    SEL_OPT_OVERLAY(a6),d0
           beq.s     regen6
-          bclr.b    #3,1643(a0)
-          bclr.b    #3,1667(a0)         Enable "discard" menu entry
+          bclr.b    #3,MEN_IT_SEL_PAST*RSC_OBJ_SZ+11(a0)  ;enable "paste" menu entry
+          bclr.b    #3,MEN_IT_SEL_PAST*RSC_OBJ_SZ+11(a0)  ;enable "discard" menu entry
 regen6    moveq.l   #7,d2
 regen5    move.l    d2,d0
-          add.l     #$48,d0             Enable all selection commands
+          add.l     #MEN_IT_SEL_ERA,d0  ;Enable all selection commands
           bsr       men_iena
           dbra      d0,regen5
-regen2    bsr       men_inv
-          bra       win_rdw
+regen2    bra       win_rdw
           ;
-zwei_1b   cmp.b     #$1b,d0
+zwei_1b   cmp.b     #MEN_IT_PRINT,d0
           bne       zwei_19
           move.w    WIN_HNDL(a4),d0    --- Command: Print ---
-          bmi       men_inv
+          bmi       evt_menu_rts
           moveq.l   #1,d0
           lea       stralpr2,a0
           bsr       alertbox
           cmp.w     #1,d0
-          bne       men_inv
+          bne       evt_menu_rts
 druck6    move.w    #$11,-(sp)          printer connected?
           trap      #1
           addq.l    #2,sp
@@ -526,7 +526,7 @@ druck6    move.w    #$11,-(sp)          printer connected?
           lea       stralpr1,a0         no -> wait
           bsr       alertbox
           cmp.w     #1,d0
-          bne       men_inv
+          bne       evt_menu_rts
           bra       druck6
 druck4    lea       form_buf,a5         calc clipping-rectangle
           move.b    frdrucke+7,d0
@@ -548,7 +548,7 @@ druck21   cmp.b     #1,d0
 druck22   moveq.l   #3,d2               ask for coordinates
           bsr       get_koos
           cmp.w     #7,d4               cancelled by user?
-          beq       men_inv
+          beq       evt_menu_rts
           move.l    last_koo,(a5)
           move.l    last_koo+4,4(a5)
 druck20   bsr       maus_bne
@@ -600,8 +600,7 @@ druck9    addq.w    #1,a3
           cmp.w     6(a5),d0
           bls       druck5
           lea       dsect_a6,a6         restore default address registers
-          bsr       maus_neu
-          bra       men_inv
+          bra       maus_neu
           ;
 druck10   move.w    (a5),d0             +++ Landscape format +++
           move.w    d0,d3
@@ -648,8 +647,7 @@ druck17   lsr.b     #1,d0               mirror byte
           sub.w     4(a5),a6            next row
           dbra      d7,druck11
 druck15   lea       dsect_a6,a6         restore default address registers
-          bsr       maus_neu
-          bra       men_inv
+          bra       maus_neu
           ;
 druck30   move.l    a0,-(sp)            +++ Print a line of graphical data +++
           move.w    #-1,-(sp)
@@ -716,10 +714,10 @@ druck33   moveq.l   #13,d0
           moveq.l   #10,d0
           bra       chrout
           ;
-zwei_19   cmp.b     #$19,d0
+zwei_19   cmp.b     #MEN_IT_SAV_AS,d0
           beq.s     save18
-          cmp.b     #$1a,d0
-          bne       men_inv
+          cmp.b     #MEN_IT_SAVE,d0
+          bne       evt_menu_rts
 save18    move.b    frdatei+33,d0       --- Command: Save/Save as ---
           bne       save3
           move.b    frdatei+35,d0       +++ Format RAW +++
@@ -737,7 +735,7 @@ save4     cmp.b     #2,d0
           moveq.l   #3,d2               coordinates
           bsr       get_koos
           cmp.w     #7,d4
-          beq       men_inv
+          beq       evt_menu_rts        cancelled
           move.l    (a1),d4
           move.l    4(a1),d5
           bra.s     save7
@@ -766,7 +764,7 @@ save14    and.w     #7,d0               is width a multiple of bytes?
           moveq.l   #1,d0
           bsr       alertbox            no -> ask for confirmation "OK to round up?"
           cmp.w     #2,d0
-          beq       men_inv             not confirmed -> abort
+          beq       evt_menu_rts        not confirmed -> abort
           and.l     #$3f803ff,d2
           add.l     #$80000,d2
 save8     cmp.l     #$2800000,d2        width 640 pixels?
@@ -833,7 +831,8 @@ save2     move.w    handle,-(sp)        ;close
           trap      #1
           addq.l    #4,sp
           bsr       maus_neu            restore normal mouse form
-          bra       men_inv
+          rts
+          ;
 save_opn  move.l    BILD_ADR(a4),a0     +++ ask user for file name +++
           add.w     #32010,a0
           moveq.l   #-1,d3              D3: parameter for itemslct
@@ -848,7 +847,7 @@ save_op3  lea       filename,a0
 save_op5  move.b    (a2)+,(a0)+         copy file name part of full path/name
           bne       save_op5
           lea       msg_buff+8,a0       "Save" menu command? (i.e. not "Save as...")
-          cmp.w     #$1a,(a0)
+          cmp.w     #MEN_IT_SAVE,(a0)
           bne.s     save_op7
           move.l    BILD_ADR(a4),a2
           add.w     #32010,a2
@@ -886,7 +885,8 @@ save_o10  clr.w     -(sp)               ;create
 save_op2  addq.l    #4,sp               notify user about TOS error
           bra       tos_err
 save_op1  addq.l    #4,sp               abort
-          bra       men_inv
+          rts
+          ;
 save3     cmp.b     #2,d0
           bne.s     save15
           lea       logo_buf,a3         +++ Format LOGO +++
@@ -936,16 +936,16 @@ save_dat  move.l    a0,-(sp)            +++ Save image data +++
 *               S H A P E S   M E N U
 *---------------------------------------------------------------------
           ;
-nr_drei   cmp.l     #$60000,d0
-          bhs       nr_vier
-          cmp.b     #$2e,d0
+nr_drei   cmp.w     #MEN_TOP_SHAPE,d1
+          bne       nr_vier
+          cmp.b     #MEN_IT_CHK_FILL,d0
           bhs       drei_2e
           move.w    d0,d2               --- Shape selection ---
           move.w    choofig,d0
-          cmp.w     #$43,d0             selection?
+          cmp.w     #MEN_IT_CHK_SEL,d0  selection?
           bne.s     drei_chg
           bsr       over_que            ask to confirm "commit selection?"
-          bne       men_inv
+          bne       evt_menu_rts
           move.w    d2,-(sp)
           bsr       fram_del
           move.w    (sp)+,d2
@@ -958,56 +958,58 @@ drei_chg  move.w    choofig,d0          disable prev. tool
           moveq.l   #1,d1
           bsr       check_xx
           lea       chootab,a0          ++ en/disable shape options in menu ++
-          cmp.b     #$43,d2
+          cmp.b     #MEN_IT_CHK_SEL,d2
           bhs.s     figur1
-          cmp.b     #$2c,d2
+          cmp.b     #MEN_IT_CURVE,d2
           beq.s     figur1
-          cmp.b     #$26,d2
+          cmp.b     #MEN_IT_LINE,d2     enable none of the options
           bls.s     figur1
           addq.l    #1,a0
-          cmp.b     #$28,d2
+          cmp.b     #MEN_IT_SQR,d2      enable fill, border & rounded options (rect. et.al.)
           bls.s     figur1
           addq.l    #1,a0
-          cmp.b     #$29,d2
+          cmp.b     #MEN_IT_POLYGN,d2   enable fill & border options only (rounded polygon is not sup'ed)
           beq.s     figur1
-          addq.l    #1,a0
+          addq.l    #1,a0               enable fill, border & arc/segment options (circle et.al.)
 figur1    moveq.l   #3,d0               enable resp. attributes
           move.l    menu_adr,a3
-          add.w     #1115,a3            addr. of state: $2e*24+11
+          add.w     #MEN_IT_CHK_FILL*RSC_OBJ_SZ+11,a3
 figur2    bset      #3,(a3)
           btst.b    d0,(a0)
           beq.s     figur3
           bclr      #3,(a3)
-figur3    add.w     #24,a3
+figur3    add.w     #RSC_OBJ_SZ,a3
           dbra      d0,figur2
           bsr       koo_chk             disable "Coordinates" if needed
-          bra       men_inv
+          rts
           ;
-drei_2e   cmp.w     #$31,d0
+drei_2e   cmp.w     #MEN_IT_ARC_SEG,d0
           beq.s     drei_31
           move.w    d0,d1               --- Switch tool attributes ---
           move.w    d0,d2
-          sub.w     #$2e,d1
+          sub.w     #MEN_IT_CHK_FILL,d1 ;calc option index 0..2
           lsl.w     #1,d1
-          lea       chooset,a0
+          lea       chooset,a0          toggle respective flag in options array
           add.w     d1,a0
           move.w    (a0),d1
           eor.b     #1,d1
           move.w    d1,(a0)
-          bsr       check_xx
+          bsr       check_xx            update "checked" state in menu
           lea       chooset,a0
-          tst.w     (a0)
-          bne       men_inv
+          tst.w     (a0)                fill & border both disabled?
+          bne       evt_menu_rts
           tst.w     4(a0)
-          bne       men_inv
-          moveq.l   #1,d1
-          eor.b     #$1e,d2
-          move.w    d2,d0
-          sub.b     #$2e,d2
-          lsl.w     #1,d2
-          move.w    d1,(a0,d2.w)
-          bsr       check_xx
-          bra       men_inv
+          bne       evt_menu_rts
+          moveq.l   #1,d1               yes -> enable opposite option
+          cmp       #MEN_IT_CHK_FILL,d2
+          bne       shapopt1
+          moveq.l   #MEN_IT_CHK_BRD,d0  ;enable border
+          move.w    d1,4(a0)
+          bra.s     shapopt2
+shapopt1  moveq.l   #MEN_IT_CHK_FILL,d0 ;enable flood-fill
+          move.w    d1,(a0)
+shapopt2  bsr       check_xx
+          rts
           ;
 drei_31   moveq.l   #2,d2               --- Tool: Arc ---
           lea       frsegmen,a2
@@ -1029,9 +1031,9 @@ drei_31   moveq.l   #2,d2               --- Tool: Arc ---
           clr.w     d1
 segmen1   lea       chooset+6,a0        no -> check-off "arc" entry
           move.w    d1,(a0)
-          moveq.l   #$31,d0
+          moveq.l   #MEN_IT_ARC_SEG,d0
           bsr       check_xx
-          bra       men_inv
+          rts
           ;
 *---------------------------------------------------------SUBFUNCTIONS
 prtout    clr.w     d0                  ** Send string to printer **
@@ -1048,18 +1050,18 @@ chrout    move.w    d0,-(sp)            ** print one byte **
           addq.l    #4,sp
           rts
           ;
-koo_chk   move.w    choofig,d0           Enable/disable "Coordinates"
-          cmp.b     #$55,d0             selected shape == coordinates?
+koo_chk   move.w    choofig,d0          Enable/disable "Coordinates"
+          cmp.b     #MEN_IT_CHK_COOR,d0 ;selected shape == coordinates?
           beq.s     koo_chk2
-          cmp.b     #$43,d0             selection?
+          cmp.b     #MEN_IT_CHK_SEL,d0  selection?
           beq.s     koo_chk3
           lea       koanztab,a1
-          sub.w     #$1f,d0
+          sub.w     #MEN_IT_PENCIL,d0
           tst.b     (a1,d0.w)
           bne.s     koo_chk3
-koo_chk2  moveq.l   #$56,d0             disable "coordinates"
+koo_chk2  moveq.l   #MEN_IT_COORDS,d0   disable "coordinates"
           bra       men_idis
-koo_chk3  moveq.l   #$56,d0             enable "coordinates"
+koo_chk3  moveq.l   #MEN_IT_COORDS,d0   enable "coordinates"
           bra       men_iena
           ;
 wind_chg  btst.b    #1,INFO(a4)         ** Image modified? **
@@ -1178,7 +1180,7 @@ set_nam3  move.b    (a1)+,(a0)+         file name
           tst.b     (a0)
           beq.s     name_xx
           move.l    a0,a2
-          moveq.l   #$1a,d0             enable "save"
+          moveq.l   #MEN_IT_SAVE,d0     enable "save"
           bsr       men_iena
           move.l    a2,a0
 name_xx   move.l    a0,INTIN+4(a6)
@@ -1186,7 +1188,7 @@ name_xx   move.l    a0,INTIN+4(a6)
           rts
           ;
 get_koos  lea       frkoordi,a2         ** Ask for Coordinates **
-          moveq.l   #3,d1
+          moveq.l   #RSC_FORM_COORD,d1
           bsr       rsrc_gad
           move.l    ADDROUT+0(a6),a3
           bsr       init_ted            write addresses into TED-record
@@ -1220,7 +1222,7 @@ get_koo4  move.w    34(a2),4(a1)
           move.w    48(a2),6(a1)
           rts
 *-------------------------------------------------------MENU-VARIABLES
-choofig   dc.w   $1f                    ID of selected shape (menu item ID)
+choofig   dc.w   MEN_IT_PENCIL          ID of selected shape (menu item ID)
 chooseg   dc.w   0,3600                 start and end angle for arc in 1/10th degree
           ;                             --- Shape menu option state ---
 chooset   dc.w   0                      option "fill shape"
