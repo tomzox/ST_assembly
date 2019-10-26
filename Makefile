@@ -5,7 +5,7 @@
 #   (because VASM does not have proper suppport for linking object files)
 # - assemble the sources into an executable in TOS format
 
-SRC_DIR_F = src
+SRC_DIR_F = src_paint
 SRC_FILES_F = $(SRC_DIR_F)/fa.asm \
               $(SRC_DIR_F)/fg.asm \
               $(SRC_DIR_F)/fh.asm \
