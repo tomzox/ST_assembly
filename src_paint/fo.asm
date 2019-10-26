@@ -31,13 +31,13 @@
  include "f_def.s"
  ;
  XREF  aescall,vdicall
- XREF  logbase,bildbuff,rec_adr,rand_tab
+ XREF  logbase,bildbuff,rec_adr
  XREF  show_m,hide_m,save_buf,save_scr,win_rdw,copy_blk,alertbox
- XREF  cent_koo,form_buf,over_cut,over_old
- XREF  work_blk,form_do,frrotier,frzoomen,frzerren
- XREF  work_bl2,form_del
+ XREF  cent_koo,over_cut,over_old
+ XREF  form_do,frrotier,frzoomen,frzerren
+ XREF  work_bl2,rand_tab,form_del
  ;
- XDEF  fuenf_4c,sinus,stack
+ XDEF  fuenf_4b,sinus,stack
  ;
 **********************************************************************
 *   Global register mapping:
@@ -47,6 +47,212 @@
 **********************************************************************
 
 *-------------------------------------------------MENU-HANDLER(cntd.)
+fuenf_4b  cmp.b     #MEN_IT_SEL_MIRR,d0
+          bne       fuenf_4c
+          tst.w     SEL_STATE(a6)       --- Mirror selection ---
+          beq       evt_menu_rts2
+          bsr       over_cut
+          lea       stralspi,a0
+          moveq.l   #2,d0
+          bsr       alertbox
+          move.w    d0,d4
+          cmp.b     #2,d4
+          beq       evt_menu_rts2
+          bsr       over_old
+          bsr       save_scr
+          bsr       save_buf
+          cmp.b     #1,d4
+          bne       spiver
+          move.w    SEL_FRM_X2Y2+2(a6),d7    -- mirror at horizontal line --
+          sub.w     SEL_FRM_X1Y1+2(a6),d7
+          beq       evt_menu_rts2
+          move.l    bildbuff,a0
+          move.l    BILD_ADR(a4),a1
+          move.w    SEL_FRM_X1Y1+2(a6),d0
+          mulu.w    #80,d0                   address
+          add.l     d0,a0
+          move.w    SEL_FRM_X2Y2+2(a6),d0
+          mulu.w    #80,d0
+          add.l     d0,a1
+          move.w    SEL_FRM_X1Y1+0(a6),d0
+          move.w    SEL_FRM_X2Y2+0(a6),d1
+          move.w    d0,d3
+          move.w    d1,d4
+          and.w     #15,d0
+          and.w     #15,d1
+          lsr.w     #3,d3
+          lsr.w     #4,d4
+          bclr      #0,d3
+          add.w     d3,a0               X start offset
+          add.w     d3,a1
+          lea       rand_tab,a2
+          lsl.w     #1,d0
+          lsl.w     #1,d1
+          move.w    (a2,d0.w),d6        bitmask for left-most word
+          move.w    2(a2,d1.w),d2       bitmask for right-most word
+          lsr.w     #1,d3
+          sub.w     d3,d4               width of middle portion
+          bne.s     spihor7
+          not.w     d2                  left-most = right-most word
+          and.w     d2,d6
+spihor7   subq.w    #2,d4
+          move.w    d6,d5
+          not.w     d5
+          move.w    d2,d3
+          not.w     d3
+spihor1   move.l    a0,a2               + Loop +
+          move.l    a1,a3
+          move.w    (a0)+,d0
+          and.w     d6,d0
+          and.w     d5,(a1)
+          or.w      d0,(a1)+
+          move.w    d4,d0               no middle portion?
+          bmi.s     spihor5
+spihor2   move.w    (a0)+,(a1)+
+          dbra      d0,spihor2
+spihor3   move.w    (a0)+,d0
+          and.w     d3,d0
+          and.w     d2,(a1)
+          or.w      d0,(a1)+
+spihor4   lea       80(a2),a0
+          lea       -80(a3),a1
+          dbra      d7,spihor1
+          move.w    #$ff00,UNDO_STATE(a6)  ;enable "undo"
+          bsr       fram_mod
+          moveq.l   #MEN_IT_UNDO,d0
+          bsr       men_iena
+          bra       win_rdw
+spihor5   cmp.w     #-1,d4              is width two words?
+          beq       spihor3
+          bra       spihor4
+          ;
+spiver    move.w    SEL_FRM_X2Y2+0(a6),d1    -- mirror at vertical line --
+          cmp.w     SEL_FRM_X1Y1+0(a6),d1
+          bls       evt_menu_rts2
+          move.w    SEL_FRM_X2Y2+2(a6),d7    height
+          move.w    SEL_FRM_X1Y1+2(a6),d0
+          sub.w     d0,d7
+          move.l    bildbuff,a0
+          move.l    BILD_ADR(a4),a1
+          mulu.w    #80,d0              Y start offset
+          add.l     d0,a0
+          add.l     d0,a1
+          move.w    SEL_FRM_X1Y1(a6),d0
+          move.w    d0,d3
+          move.w    d1,d4
+          and.w     #15,d0
+          and.w     #15,d1
+          lsr.w     #3,d3
+          lsr.w     #3,d4
+          bclr      #0,d3
+          bclr      #0,d4
+          add.w     d3,a0               X start offset
+          add.w     d4,a1
+          lea       rand_tab,a2
+          lsl.w     #1,d0
+          lsl.w     #1,d1
+          moveq.l   #32,d6              bitmask right border
+          sub.w     d0,d6
+          move.w    (a2,d6.w),d6
+          moveq.l   #30,d5              bitmask left border
+          sub.w     d1,d5
+          move.w    (a2,d5.w),d5
+          sub.w     d3,d4               width of middle portion
+          lsr.w     #1,d4
+          bne.s     spiver9
+          and.w     d5,d6               left-most = right-most word
+spiver9   subq.w    #2,d4
+spiver1   move.l    a0,a2               +++++ Loop +++++
+          move.l    a1,a3
+          move.w    (a0)+,d0
+          moveq.l   #15,d2
+spiver2   lsr.w     #1,d0               left border
+          roxl.w    #1,d1
+          dbra      d2,spiver2
+          not.w     d6
+          and.w     d6,d1
+          not.w     d6
+          and.w     d6,(a1)
+          or.w      d1,(a1)
+          move.w    d4,d3
+          bmi       spiver3
+spiver4   move.w    (a0)+,d0
+          moveq.l   #15,d2
+spiver5   lsr.w     #1,d0               middle part
+          roxl.w    #1,d1
+          dbra      d2,spiver5
+          move.w    d1,-(a1)
+          dbra      d3,spiver4
+spiver6   move.w    (a0),d0             right border
+          moveq.l   #15,d2
+spiver7   lsr.w     #1,d0
+          roxl.w    #1,d1
+          dbra      d2,spiver7
+          and.w     d5,d1
+          not.w     d5
+          and.w     d5,-(a1)
+          not.w     d5
+          or.w      d1,(a1)
+spiver8   lea       80(a2),a0
+          lea       80(a3),a1
+          dbra      d7,spiver1
+          move.w    SEL_FRM_X1Y1(a6),d0    ++ correct shift ++
+          move.w    SEL_FRM_X2Y2(a6),d6
+          and.w     #15,d0
+          and.w     #15,d6
+          moveq.l   #15,d5              D5/D6: remaining width left/right
+          sub.w     d0,d5
+          move.w    SEL_FRM_X1Y1(a6),d3       D3/D4: X1-X2 coords.
+          move.w    SEL_FRM_X2Y2(a6),d4
+          cmp.w     d5,d6
+          beq.s     spiver10            not needed -> done
+          blo.s     spiver11
+          sub.w     d5,d6               + to the right +
+          move.w    d3,d0
+          sub.w     d6,d0
+          move.w    d0,-(sp)
+          move.w    d3,d1
+          subq.w    #1,d1
+          move.w    d1,-(sp)
+          move.w    d4,d1
+          sub.w     d6,d1
+          bra.s     spiver12
+spiver11  sub.w     d6,d5               + to the left +
+          move.w    d4,d0
+          addq.w    #1,d0
+          move.w    d0,-(sp)
+          move.w    d4,d1
+          add.w     d5,d1
+          move.w    d1,-(sp)
+          move.w    d3,d0
+          add.w     d5,d0
+spiver12  move.l    SEL_FRM_X1Y1(a6),d2    + shift +
+          swap      d0
+          swap      d1
+          move.w    SEL_FRM_X1Y1+2(a6),d0
+          move.w    SEL_FRM_X2Y2+2(a6),d1
+          move.l    BILD_ADR(a4),a0
+          move.l    a0,a1
+          bsr       copy_blk
+          move.w    (sp)+,d1            + fill gap +
+          move.w    (sp)+,d0
+          swap      d0
+          swap      d1
+          move.w    SEL_FRM_X1Y1+2(a6),d0
+          move.w    SEL_FRM_X2Y2+2(a6),d1
+          move.l    d0,d2
+          move.l    bildbuff,a0
+          move.l    BILD_ADR(a4),a1
+          bsr       copy_blk
+spiver10  move.w    #$ff00,UNDO_STATE(a6) ;enable "undo"
+          bsr       fram_mod
+          moveq.l   #MEN_IT_UNDO,d0
+          bsr       men_iena
+          bra       win_rdw
+spiver3   cmp.w     #-1,d4
+          beq       spiver6
+          bra       spiver8
+          ;
 fuenf_4c  cmp.b     #MEN_IT_SEL_ROT,d0
           bne       fuenf_4d
           tst.w     SEL_STATE(a6)       --- Rotate ---

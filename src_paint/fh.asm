@@ -30,7 +30,7 @@
  include "f_sys.s"
  include "f_def.s"
  ;
- XREF  frradier,frmodus,frpinsel,frmuster,new_1koo,new_2koo,vdicall
+ XREF  frradier,frpinsel,frmuster,new_1koo,new_2koo,vdicall
  XREF  hide_m,show_m,noch_qu,return,set_wrmo,win_xy,logbase
  XREF  bildbuff,frsprayd,frlinie,frpunkt,noch_qu,clip_on
  XREF  set_attr,set_att2,ret_attr,ret_att2,chooset,sinus

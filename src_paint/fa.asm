@@ -30,8 +30,10 @@
  include "f_sys.s"
  include "f_def.s"
  ;
- XREF  evt_butt,evt_menu,fram_drw,save_buf
+ XREF  evt_butt,fram_drw
  XREF  alertbox,koos_mak,wind_chg,init_itemslct
+ XREF  evt_menu_attr,evt_menu_sel,evt_menu_tools
+ XREF  evt_menu_desk,evt_menu_file,evt_menu_shapes
  ;
  XDEF  aescall,vdicall
  XDEF  bildbuff,wi1,rec_adr,win_rdw,show_m,hide_m
@@ -185,8 +187,23 @@ evt_mul1  move.l    rec_adr,a4          --- Message ---
           move.w    EV_MSG_BUF(a6),d0
           cmp.w     #10,d0              menu item selected?
           bne.s     evt_mul4
-          bsr       evt_menu
-          move.w    EV_MSG_BUF+6(a6),d1 ;undo inversion of top-level menu
+          pea       evt_mul5            push handler address to stack -> "rts" returns to loop
+          move.w    EV_MSG_BUF+6(a6),d1   object index of top-level menu
+          move.w    EV_MSG_BUF+8(a6),d0   object index of selected entry
+          cmp.w     #MEN_TOP_DESK,d1
+          beq       evt_menu_desk
+          cmp.w     #MEN_TOP_FILE,d1
+          beq       evt_menu_file
+          cmp.w     #MEN_TOP_SHAPE,d1
+          beq       evt_menu_shapes
+          cmp.w     #MEN_TOP_ATTR,d1
+          beq       evt_menu_attr
+          cmp.w     #MEN_TOP_SEL,d1
+          beq       evt_menu_sel
+          cmp.w     #MEN_TOP_TOOLS,d1
+          beq       evt_menu_tools
+          addq.l    #4,sp
+evt_mul5  move.w    EV_MSG_BUF+6(a6),d1 ;undo inversion of top-level menu
           aes       33 2 1 1 0 !d1 1 !menu_adr  ;menu_tnormal
           bra       evt_multi
 evt_mul4  ;                             check for window event types
@@ -601,7 +618,6 @@ absmod    move.l    rec_adr,a4          ** Switch into full-screen mode **
           bmi       evt_multi
           bsr       swap_buf
           bsr       hide_m
-          aes       30 1 1 1 0 0 !menu_adr    ;menu_bar
           move.w    #-1,-(sp)           resolution unchanged
           move.l    bildbuff,-(sp)      phys. screen := logical screen
           move.l    bildbuff,-(sp)
@@ -649,7 +665,6 @@ absmod5   tst.b     MOUSE_RBUT(a6)      busy loop until right mouse button is re
           bne.s     absmod5
           clr.w     MOUSE_RBUT(a6)
           bsr       win_rdw
-          aes       30 1 1 1 0 1 !menu_adr    ;menu_bar
           bra       evt_multi
 *--------------------------------------------------------SUB-FUNCTIONS
 hide_m    move.l    #$7b0000,CONTRL+0(a6)       hide_cursor
@@ -741,7 +756,13 @@ maus_kn5  btst      #1,d0               ++ right mouse button ++
           move.w    #-1,MOUSE_RBUT(a6)
           bra.s     maus_kn1
 maus_kn4  clr.b     MOUSE_RBUT(a6)
-maus_kn1  move.l    MOUSE_VEC_BUT(a6),8(sp) ;place address of standard handler on the stack
+maus_kn1  lea       wiabs,a0            in full-screen mode?
+          cmp       rec_adr,a0
+          bne.s     maus_kn6
+          movem.l   (sp)+,a0/a6         yes -> do not invoke standard handler
+          addq.l    #4,sp
+          rts
+maus_kn6  move.l    MOUSE_VEC_BUT(a6),8(sp) ;place address of standard handler on the stack
           movem.l   (sp)+,a0/a6         restore registers
           rts                           ;jump via RTS so that no register is needed
           ;
@@ -751,7 +772,13 @@ maus_mov  subq.l    #8,sp               ** Mouse movement interrupt **
           move.w    d0,MOUSE_CUR_XY+0(a6)   ;X
           move.w    d1,MOUSE_CUR_XY+2(a6)   ;Y
           move.l    MOUSE_VEC_MOV(a6),4(sp) ;place address of standard handler on the stack
-          move.l    (sp)+,a6            restore A6
+          lea       wiabs,a6            in full-screen mode?
+          cmp       rec_adr,a6
+          bne.s     maus_mo1 
+          move.l    (sp),a6             yes -> do not invoke standard handler
+          addq.l    #8,sp
+          rts
+maus_mo1  move.l    (sp)+,a6            restore A6
           rts                           ;jump via RTS so that no register is needed
           ;
 save_scr  move.w    wi_count,d0         ** Release screen buffer **

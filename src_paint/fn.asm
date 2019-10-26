@@ -32,18 +32,18 @@
  ;
  XREF  aescall,vdicall
  XREF  bildbuff,rec_adr,menu_adr,koanztab
- XREF  show_m,hide_m,save_scr,win_rdw,rsrc_gad,set_xx,drei_chg
- XREF  save_buf,win_abs,choofig,copy_blk,win_xy,koos_mak,alertbox
- XREF  rand_tab,logbase,get_koos,over_que,fram_del,fuenf_4c,koostr1
+ XREF  show_m,hide_m,save_scr,win_rdw,rsrc_gad,drei_chg
+ XREF  save_buf,win_abs,copy_blk,win_xy,koos_mak,alertbox
+ XREF  logbase,get_koos,over_que,fram_del,fuenf_4b,koostr1
  ;
- XDEF  chootxt,chooras,choopat,frraster,frinfobo,frsegmen
+ XDEF  choofig,chootxt,chooras,choopat,frraster,frinfobo,frsegmen
  XDEF  frkoordi,frmodus,frpunkt,frpinsel,frsprayd,frmuster,frtext
  XDEF  frradier,frlinie,frdrucke,frdatei,check_xx
  XDEF  work_blk,form_do,form_del,form_buf,form_wrt,frzeiche
  XDEF  chookoo,work_bl2,init_ted,maus_neu,over_beg,over_old
  XDEF  maus_bne,cent_koo,over_cut,frrotier,frzerren,frzoomen,frprojek
- XDEF  evt_menu_attr
- ;
+ XDEF  evt_menu_attr,evt_menu_shapes
+
 **********************************************************************
 *   Global register mapping:
 *
@@ -51,6 +51,107 @@
 *   a6   Base address of data section
 **********************************************************************
 
+*---------------------------------------------------------------------
+*               S H A P E S   M E N U
+*---------------------------------------------------------------------
+evt_menu_shapes:
+          cmp.b     #MEN_IT_CHK_FILL,d0
+          bhs       drei_2e
+          move.w    d0,d2               --- Shape selection ---
+          move.w    choofig,d0
+          cmp.w     #MEN_IT_CHK_SEL,d0  selection?
+          bne.s     drei_chg
+          bsr       over_que            ask to confirm "commit selection?"
+          bne       evt_menu_rts
+          move.w    d2,-(sp)
+          bsr       fram_del
+          move.w    (sp)+,d2
+drei_chg  move.w    choofig,d0          disable prev. tool
+          clr.w     d1
+          bsr       check_xx
+          move.w    d2,d0               enable new tool
+          lea       choofig,a0
+          move.w    d2,(a0)
+          moveq.l   #1,d1
+          bsr       check_xx
+          lea       chootab,a0          ++ en/disable shape options in menu ++
+          cmp.b     #MEN_IT_CHK_SEL,d2
+          bhs.s     figur1
+          cmp.b     #MEN_IT_CURVE,d2
+          beq.s     figur1
+          cmp.b     #MEN_IT_LINE,d2     enable none of the options
+          bls.s     figur1
+          addq.l    #1,a0
+          cmp.b     #MEN_IT_SQR,d2      enable fill, border & rounded options (rect. et.al.)
+          bls.s     figur1
+          addq.l    #1,a0
+          cmp.b     #MEN_IT_POLYGN,d2   enable fill & border options only (rounded polygon is not sup'ed)
+          beq.s     figur1
+          addq.l    #1,a0               enable fill, border & arc/segment options (circle et.al.)
+figur1    moveq.l   #3,d0               enable resp. attributes
+          move.l    menu_adr,a3
+          add.w     #MEN_IT_CHK_FILL*RSC_OBJ_SZ+11,a3
+figur2    bset      #3,(a3)
+          btst.b    d0,(a0)
+          beq.s     figur3
+          bclr      #3,(a3)
+figur3    add.w     #RSC_OBJ_SZ,a3
+          dbra      d0,figur2
+          bsr       koo_chk             disable "Coordinates" if needed
+          rts
+          ;
+drei_2e   cmp.w     #MEN_IT_ARC_SEG,d0
+          beq.s     drei_31
+          move.w    d0,d1               --- Switch tool attributes ---
+          move.w    d0,d2
+          sub.w     #MEN_IT_CHK_FILL,d1 ;calc option index 0..2
+          lsl.w     #1,d1
+          lea       chooset,a0          toggle respective flag in options array
+          add.w     d1,a0
+          move.w    (a0),d1
+          eor.b     #1,d1
+          move.w    d1,(a0)
+          bsr       check_xx            update "checked" state in menu
+          lea       chooset,a0
+          tst.w     (a0)                fill & border both disabled?
+          bne       evt_menu_rts
+          tst.w     4(a0)
+          bne       evt_menu_rts
+          moveq.l   #1,d1               yes -> enable opposite option
+          cmp       #MEN_IT_CHK_FILL,d2
+          bne       shapopt1
+          moveq.l   #MEN_IT_CHK_BRD,d0  ;enable border
+          move.w    d1,4(a0)
+          bra.s     shapopt2
+shapopt1  moveq.l   #MEN_IT_CHK_FILL,d0 ;enable flood-fill
+          move.w    d1,(a0)
+shapopt2  bsr       check_xx
+          rts
+          ;
+drei_31   moveq.l   #2,d2               --- Tool: Arc ---
+          lea       frsegmen,a2
+          bsr       form_do
+          bsr       form_del
+          move.w    frsegmen+6,d3       calc 10th of degree
+          mulu.w    #10,d3
+          add.w     frsegmen+20,d3
+          swap      d3
+          move.w    frsegmen+34,d4
+          mulu.w    #10,d4
+          add.w     frsegmen+48,d4
+          move.w    d4,d3
+          lea       chooseg,a0
+          move.l    d3,(a0)
+          moveq.l   #1,d1
+          cmp.l     #360,d3             draw complete circle? (i.e. 0-360)
+          bne.s     segmen1
+          clr.w     d1
+segmen1   lea       chooset+6,a0        no -> check-off "arc" entry
+          move.w    d1,(a0)
+          moveq.l   #MEN_IT_ARC_SEG,d0
+          bsr       check_xx
+          rts
+          ;
 *---------------------------------------------------------------------
 *               A T T R I B U T E S   M E N U
 *---------------------------------------------------------------------
@@ -492,212 +593,6 @@ ueber4    tst.b     SEL_CUR_COMB(a6)    + keep "commit" enabled? +
           moveq.l   #MEN_IT_SEL_COMI,d0 ;disable "commit"
           bsr       men_idis
 ueber5    rts
-          ;
-fuenf_4b  cmp.b     #MEN_IT_SEL_MIRR,d0
-          bne       fuenf_4c
-          tst.w     SEL_STATE(a6)       --- Mirror selection ---
-          beq       evt_menu_rts2
-          bsr       over_cut
-          lea       stralspi,a0
-          moveq.l   #2,d0
-          bsr       alertbox
-          move.w    d0,d4
-          cmp.b     #2,d4
-          beq       evt_menu_rts2
-          bsr       over_old
-          bsr       save_scr
-          bsr       save_buf
-          cmp.b     #1,d4
-          bne       spiver
-          move.w    SEL_FRM_X2Y2+2(a6),d7    -- mirror at horizontal line --
-          sub.w     SEL_FRM_X1Y1+2(a6),d7
-          beq       evt_menu_rts2
-          move.l    bildbuff,a0
-          move.l    BILD_ADR(a4),a1
-          move.w    SEL_FRM_X1Y1+2(a6),d0
-          mulu.w    #80,d0                   address
-          add.l     d0,a0
-          move.w    SEL_FRM_X2Y2+2(a6),d0
-          mulu.w    #80,d0
-          add.l     d0,a1
-          move.w    SEL_FRM_X1Y1+0(a6),d0
-          move.w    SEL_FRM_X2Y2+0(a6),d1
-          move.w    d0,d3
-          move.w    d1,d4
-          and.w     #15,d0
-          and.w     #15,d1
-          lsr.w     #3,d3
-          lsr.w     #4,d4
-          bclr      #0,d3
-          add.w     d3,a0               X start offset
-          add.w     d3,a1
-          lea       rand_tab,a2
-          lsl.w     #1,d0
-          lsl.w     #1,d1
-          move.w    (a2,d0.w),d6        bitmask for left-most word
-          move.w    2(a2,d1.w),d2       bitmask for right-most word
-          lsr.w     #1,d3
-          sub.w     d3,d4               width of middle portion
-          bne.s     spihor7
-          not.w     d2                  left-most = right-most word
-          and.w     d2,d6
-spihor7   subq.w    #2,d4
-          move.w    d6,d5
-          not.w     d5
-          move.w    d2,d3
-          not.w     d3
-spihor1   move.l    a0,a2               + Loop +
-          move.l    a1,a3
-          move.w    (a0)+,d0
-          and.w     d6,d0
-          and.w     d5,(a1)
-          or.w      d0,(a1)+
-          move.w    d4,d0               no middle portion?
-          bmi.s     spihor5
-spihor2   move.w    (a0)+,(a1)+
-          dbra      d0,spihor2
-spihor3   move.w    (a0)+,d0
-          and.w     d3,d0
-          and.w     d2,(a1)
-          or.w      d0,(a1)+
-spihor4   lea       80(a2),a0
-          lea       -80(a3),a1
-          dbra      d7,spihor1
-          move.w    #$ff00,UNDO_STATE(a6)  ;enable "undo"
-          bsr       fram_mod
-          moveq.l   #MEN_IT_UNDO,d0
-          bsr       men_iena
-          bra       win_rdw
-spihor5   cmp.w     #-1,d4              is width two words?
-          beq       spihor3
-          bra       spihor4
-          ;
-spiver    move.w    SEL_FRM_X2Y2+0(a6),d1    -- mirror at vertical line --
-          cmp.w     SEL_FRM_X1Y1+0(a6),d1
-          bls       evt_menu_rts2
-          move.w    SEL_FRM_X2Y2+2(a6),d7    height
-          move.w    SEL_FRM_X1Y1+2(a6),d0
-          sub.w     d0,d7
-          move.l    bildbuff,a0
-          move.l    BILD_ADR(a4),a1
-          mulu.w    #80,d0              Y start offset
-          add.l     d0,a0
-          add.l     d0,a1
-          move.w    SEL_FRM_X1Y1(a6),d0
-          move.w    d0,d3
-          move.w    d1,d4
-          and.w     #15,d0
-          and.w     #15,d1
-          lsr.w     #3,d3
-          lsr.w     #3,d4
-          bclr      #0,d3
-          bclr      #0,d4
-          add.w     d3,a0               X start offset
-          add.w     d4,a1
-          lea       rand_tab,a2
-          lsl.w     #1,d0
-          lsl.w     #1,d1
-          moveq.l   #32,d6              bitmask right border
-          sub.w     d0,d6
-          move.w    (a2,d6.w),d6
-          moveq.l   #30,d5              bitmask left border
-          sub.w     d1,d5
-          move.w    (a2,d5.w),d5
-          sub.w     d3,d4               width of middle portion
-          lsr.w     #1,d4
-          bne.s     spiver9
-          and.w     d5,d6               left-most = right-most word
-spiver9   subq.w    #2,d4
-spiver1   move.l    a0,a2               +++++ Loop +++++
-          move.l    a1,a3
-          move.w    (a0)+,d0
-          moveq.l   #15,d2
-spiver2   lsr.w     #1,d0               left border
-          roxl.w    #1,d1
-          dbra      d2,spiver2
-          not.w     d6
-          and.w     d6,d1
-          not.w     d6
-          and.w     d6,(a1)
-          or.w      d1,(a1)
-          move.w    d4,d3
-          bmi       spiver3
-spiver4   move.w    (a0)+,d0
-          moveq.l   #15,d2
-spiver5   lsr.w     #1,d0               middle part
-          roxl.w    #1,d1
-          dbra      d2,spiver5
-          move.w    d1,-(a1)
-          dbra      d3,spiver4
-spiver6   move.w    (a0),d0             right border
-          moveq.l   #15,d2
-spiver7   lsr.w     #1,d0
-          roxl.w    #1,d1
-          dbra      d2,spiver7
-          and.w     d5,d1
-          not.w     d5
-          and.w     d5,-(a1)
-          not.w     d5
-          or.w      d1,(a1)
-spiver8   lea       80(a2),a0
-          lea       80(a3),a1
-          dbra      d7,spiver1
-          move.w    SEL_FRM_X1Y1(a6),d0    ++ correct shift ++
-          move.w    SEL_FRM_X2Y2(a6),d6
-          and.w     #15,d0
-          and.w     #15,d6
-          moveq.l   #15,d5              D5/D6: remaining width left/right
-          sub.w     d0,d5
-          move.w    SEL_FRM_X1Y1(a6),d3       D3/D4: X1-X2 coords.
-          move.w    SEL_FRM_X2Y2(a6),d4
-          cmp.w     d5,d6
-          beq.s     spiver10            not needed -> done
-          blo.s     spiver11
-          sub.w     d5,d6               + to the right +
-          move.w    d3,d0
-          sub.w     d6,d0
-          move.w    d0,-(sp)
-          move.w    d3,d1
-          subq.w    #1,d1
-          move.w    d1,-(sp)
-          move.w    d4,d1
-          sub.w     d6,d1
-          bra.s     spiver12
-spiver11  sub.w     d6,d5               + to the left +
-          move.w    d4,d0
-          addq.w    #1,d0
-          move.w    d0,-(sp)
-          move.w    d4,d1
-          add.w     d5,d1
-          move.w    d1,-(sp)
-          move.w    d3,d0
-          add.w     d5,d0
-spiver12  move.l    SEL_FRM_X1Y1(a6),d2    + shift +
-          swap      d0
-          swap      d1
-          move.w    SEL_FRM_X1Y1+2(a6),d0
-          move.w    SEL_FRM_X2Y2+2(a6),d1
-          move.l    BILD_ADR(a4),a0
-          move.l    a0,a1
-          bsr       copy_blk
-          move.w    (sp)+,d1            + fill gap +
-          move.w    (sp)+,d0
-          swap      d0
-          swap      d1
-          move.w    SEL_FRM_X1Y1+2(a6),d0
-          move.w    SEL_FRM_X2Y2+2(a6),d1
-          move.l    d0,d2
-          move.l    bildbuff,a0
-          move.l    BILD_ADR(a4),a1
-          bsr       copy_blk
-spiver10  move.w    #$ff00,UNDO_STATE(a6) ;enable "undo"
-          bsr       fram_mod
-          moveq.l   #MEN_IT_UNDO,d0
-          bsr       men_iena
-          bra       win_rdw
-spiver3   cmp.w     #-1,d4
-          beq       spiver6
-          bra       spiver8
           ;
 *---------------------------------------------------------------------
 *               T O O L S   M E N U
@@ -1262,6 +1157,19 @@ init_te1  moveq.l   #8,d0
           move.l    (sp)+,a2
           rts
 *-------------------------------------------------------MENU-VARIABLES
+choofig   dc.w   MEN_IT_PENCIL          ; ID of selected shape (menu item ID)
+chooseg   dc.w   0,3600                 ; start and end angle for arc in 1/10th degree
+          ;                             --- Shape menu option state ---
+chooset   dc.w   0                      ; option "fill shape"
+          dc.w   0                      ; option "rounded corners"
+          dc.w   1                      ; option "shape borders"
+          dc.w   0                      ; option "segment" (arc)
+          ;                             --- Shape option compatibility ---
+chootab   dc.b   %0000                  ; allow none
+          dc.b   %1110                  ; rectangle etc: allow fill,rounded-bd.,border
+          dc.b   %1010                  ; polygon: fill+border (but not rounded)
+          dc.b   %1011                  ; circle etc: allow fill+border+arc
+          ;
 choopat   dc.w    $aaaa                 ; bitmask of user-defined line pattern
 chooras   dc.w    0                     ; flag: grid mode enabled?
 chootxt   dc.w    0

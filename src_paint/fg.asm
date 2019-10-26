@@ -34,7 +34,7 @@
  XREF  chookoo,choofig,chooset,chooras,chootxt,choopat,chooseg
  XREF  rec_adr,logbase,bildbuff
  XREF  copy_blk,save_scr,fram_del,form_do,form_del
- XREF  hide_m,show_m,work_blk,work_bl2,alertbox,pinsel,spdose,gummi
+ XREF  hide_m,show_m,work_bl2,alertbox,pinsel,spdose,gummi
  XREF  punkt,kurve,radier,over_old,over_que,over_beg,mfdb_q,stack
  ;
  XDEF  evt_butt
@@ -113,7 +113,7 @@ exit2     add.w     d0,6(a1)
           add.w     d1,4(a1)
 exit1     tst.b     UNDO_STATE(a6)
           beq.s     exit6
-          move.l    rec_adr,a0          abs window?
+          move.l    rec_adr,a0          full-screen mode?
           move.w    SCHIEBER(a0),d0     -> no backup needed
           bmi       exit6
           bsr       save_buf            copy image into undo buffer
@@ -141,27 +141,6 @@ exit7     tst.b     MOUSE_LBUT+1(a6)    wait for mouse button to be released
           ;
 donot     move.w    #-1,MOUSE_LBUT+2(a6)   mouse click unhandled
           rts
-          ;
-*---------------------------------------------------------------------
-tool_func_table:
-          dc.w     punkt-tool_func_table
-          dc.w     pinsel-tool_func_table
-          dc.w     spdose-tool_func_table
-          dc.w     fuellen-tool_func_table
-          dc.w     text-tool_func_table
-          dc.w     radier-tool_func_table
-          dc.w     gummi-tool_func_table
-          dc.w     linie-tool_func_table
-          dc.w     quadrat-tool_func_table
-          dc.w     quadrat-tool_func_table
-          dc.w     linie-tool_func_table
-          dc.w     kreis-tool_func_table
-          dc.w     kreis-tool_func_table
-          dc.w     kurve-tool_func_table
-          ;
-          ;                             Number of coordinates required by shapes
-          ;                             table is indexed by SHAPE menu entry index (-MEN_IT_PENCIL)
-koanztab  dc.b     1,0,0,1,1,1,0,3,3,3,1,3,3,3
           ;
 *---------------------------------------------------GRAPHICS-FUNCTIONS
 pospe     clr.w     UNDO_STATE(a6)      *** Save position ***
@@ -1423,6 +1402,27 @@ win_xy    ds.w   2            ; Window X1/Y1 rel. to screen root 0/0
           ds.w   2            ; Window X2/Y2 (i.e. lower-right corner)
           ds.w   2            ; Y/X(!) offsets window X1/Y1 to image root 0/0 (negative!)
           ds.w   1            ; always zero (for allowing to read X off. via long?)
+*---------------------------------------------------------------------
+tool_func_table:
+          dc.w     punkt-tool_func_table
+          dc.w     pinsel-tool_func_table
+          dc.w     spdose-tool_func_table
+          dc.w     fuellen-tool_func_table
+          dc.w     text-tool_func_table
+          dc.w     radier-tool_func_table
+          dc.w     gummi-tool_func_table
+          dc.w     linie-tool_func_table
+          dc.w     quadrat-tool_func_table
+          dc.w     quadrat-tool_func_table
+          dc.w     linie-tool_func_table
+          dc.w     kreis-tool_func_table
+          dc.w     kreis-tool_func_table
+          dc.w     kurve-tool_func_table
+          ;
+          ;                             Number of coordinates required by shapes
+          ;                             table is indexed by SHAPE menu entry index (-MEN_IT_PENCIL)
+koanztab  dc.b     1,0,0,1,1,1,0,3,3,3,1,3,3,3
+          ;
 *---------------------------------------------------------------------
 data_buf  ds.w   4                      ; scratch buffer for drawing text
 koostr    dc.b   27,'Y h###/###',0

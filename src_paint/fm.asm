@@ -34,36 +34,19 @@
  XREF  bildbuff,wi1,wi_count,rec_adr,menu_adr,win_xy
  XREF  last_koo,rsrc_gad,save_scr,set_xx,win_rdw,form_wrt
  XREF  fram_del,form_do,form_del,form_buf
- XREF  frinfobo,frsegmen,frkoordi,frdrucke,frdatei,check_xx,koanztab
+ XREF  frinfobo,frkoordi,frdrucke,frdatei,koanztab,choofig
  XREF  init_ted,copy_blk,maus_neu,fram_ins,maus_bne
- XREF  evt_menu_attr,evt_menu_sel,evt_menu_tools
  ;
- XDEF  choofig,chooset,chooseg,drei_chg,get_koos,over_que,directory
- XDEF  alertbox,evt_menu,wind_chg,init_itemslct
- ;
+ XDEF  evt_menu_desk,evt_menu_file
+ XDEF  get_koos,over_que
+ XDEF  alertbox,wind_chg,init_itemslct
+
 **********************************************************************
 *   Global register mapping:
 *
 *   a4   Address of address of current window record
 *   a6   Base address of data section
 **********************************************************************
-
-evt_menu  move.w    EV_MSG_BUF+6(a6),d1   object index of top-level menu
-          move.w    EV_MSG_BUF+8(a6),d0   object index of selected entry
-          cmp.w     #MEN_TOP_DESK,d1
-          beq       evt_menu_desk
-          cmp.w     #MEN_TOP_FILE,d1
-          beq       evt_menu_file
-          cmp.w     #MEN_TOP_SHAPE,d1
-          beq       evt_menu_shapes
-          cmp.w     #MEN_TOP_ATTR,d1
-          beq       evt_menu_attr
-          cmp.w     #MEN_TOP_SEL,d1
-          beq       evt_menu_sel
-          cmp.w     #MEN_TOP_TOOLS,d1
-          beq       evt_menu_tools
-evt_menu_rts:
-          rts
 
 *---------------------------------------------------------------------
 *               D E S K   M E N U
@@ -74,8 +57,10 @@ evt_menu_desk:
           moveq.l   #1,d2
           lea       frinfobo,a2
           bsr       form_do             --- Show "About..." dialog ---
-          bra       form_del
-          ;
+          bsr       form_del
+evt_menu_rts:
+          rts
+
 *---------------------------------------------------------------------
 *               F I L E   M E N U
 *---------------------------------------------------------------------
@@ -943,107 +928,6 @@ save_dat  move.l    a0,-(sp)            +++ Save image data +++
           add.w     #12,sp
           rts
           ;
-*---------------------------------------------------------------------
-*               S H A P E S   M E N U
-*---------------------------------------------------------------------
-evt_menu_shapes:
-          cmp.b     #MEN_IT_CHK_FILL,d0
-          bhs       drei_2e
-          move.w    d0,d2               --- Shape selection ---
-          move.w    choofig,d0
-          cmp.w     #MEN_IT_CHK_SEL,d0  selection?
-          bne.s     drei_chg
-          bsr       over_que            ask to confirm "commit selection?"
-          bne       evt_menu_rts
-          move.w    d2,-(sp)
-          bsr       fram_del
-          move.w    (sp)+,d2
-drei_chg  move.w    choofig,d0          disable prev. tool
-          clr.w     d1
-          bsr       check_xx
-          move.w    d2,d0               enable new tool
-          lea       choofig,a0
-          move.w    d2,(a0)
-          moveq.l   #1,d1
-          bsr       check_xx
-          lea       chootab,a0          ++ en/disable shape options in menu ++
-          cmp.b     #MEN_IT_CHK_SEL,d2
-          bhs.s     figur1
-          cmp.b     #MEN_IT_CURVE,d2
-          beq.s     figur1
-          cmp.b     #MEN_IT_LINE,d2     enable none of the options
-          bls.s     figur1
-          addq.l    #1,a0
-          cmp.b     #MEN_IT_SQR,d2      enable fill, border & rounded options (rect. et.al.)
-          bls.s     figur1
-          addq.l    #1,a0
-          cmp.b     #MEN_IT_POLYGN,d2   enable fill & border options only (rounded polygon is not sup'ed)
-          beq.s     figur1
-          addq.l    #1,a0               enable fill, border & arc/segment options (circle et.al.)
-figur1    moveq.l   #3,d0               enable resp. attributes
-          move.l    menu_adr,a3
-          add.w     #MEN_IT_CHK_FILL*RSC_OBJ_SZ+11,a3
-figur2    bset      #3,(a3)
-          btst.b    d0,(a0)
-          beq.s     figur3
-          bclr      #3,(a3)
-figur3    add.w     #RSC_OBJ_SZ,a3
-          dbra      d0,figur2
-          bsr       koo_chk             disable "Coordinates" if needed
-          rts
-          ;
-drei_2e   cmp.w     #MEN_IT_ARC_SEG,d0
-          beq.s     drei_31
-          move.w    d0,d1               --- Switch tool attributes ---
-          move.w    d0,d2
-          sub.w     #MEN_IT_CHK_FILL,d1 ;calc option index 0..2
-          lsl.w     #1,d1
-          lea       chooset,a0          toggle respective flag in options array
-          add.w     d1,a0
-          move.w    (a0),d1
-          eor.b     #1,d1
-          move.w    d1,(a0)
-          bsr       check_xx            update "checked" state in menu
-          lea       chooset,a0
-          tst.w     (a0)                fill & border both disabled?
-          bne       evt_menu_rts
-          tst.w     4(a0)
-          bne       evt_menu_rts
-          moveq.l   #1,d1               yes -> enable opposite option
-          cmp       #MEN_IT_CHK_FILL,d2
-          bne       shapopt1
-          moveq.l   #MEN_IT_CHK_BRD,d0  ;enable border
-          move.w    d1,4(a0)
-          bra.s     shapopt2
-shapopt1  moveq.l   #MEN_IT_CHK_FILL,d0 ;enable flood-fill
-          move.w    d1,(a0)
-shapopt2  bsr       check_xx
-          rts
-          ;
-drei_31   moveq.l   #2,d2               --- Tool: Arc ---
-          lea       frsegmen,a2
-          bsr       form_do
-          bsr       form_del
-          move.w    frsegmen+6,d3       calc 10th of degree
-          mulu.w    #10,d3
-          add.w     frsegmen+20,d3
-          swap      d3
-          move.w    frsegmen+34,d4
-          mulu.w    #10,d4
-          add.w     frsegmen+48,d4
-          move.w    d4,d3
-          lea       chooseg,a0
-          move.l    d3,(a0)
-          moveq.l   #1,d1
-          cmp.l     #360,d3             draw complete circle? (i.e. 0-360)
-          bne.s     segmen1
-          clr.w     d1
-segmen1   lea       chooset+6,a0        no -> check-off "arc" entry
-          move.w    d1,(a0)
-          moveq.l   #MEN_IT_ARC_SEG,d0
-          bsr       check_xx
-          rts
-          ;
 *---------------------------------------------------------SUBFUNCTIONS
 prtout    clr.w     d0                  ** Send string to printer **
           move.b    (a2)+,d0
@@ -1251,19 +1135,6 @@ get_koo3  move.w    6(a2),(a1)
 get_koo4  move.w    34(a2),4(a1)
           move.w    48(a2),6(a1)
           rts
-*-------------------------------------------------------MENU-VARIABLES
-choofig   dc.w   MEN_IT_PENCIL          ID of selected shape (menu item ID)
-chooseg   dc.w   0,3600                 start and end angle for arc in 1/10th degree
-          ;                             --- Shape menu option state ---
-chooset   dc.w   0                      option "fill shape"
-          dc.w   0                      option "rounded corners"
-          dc.w   1                      option "shape borders"
-          dc.w   0                      option "segment" (arc)
-          ;                             --- Shape option compatibility ---
-chootab   dc.b   %0000                  allow none
-          dc.b   %1110                  rectangle etc: allow fill,rounded-bd.,border
-          dc.b   %1010                  polygon: fill+border (but not rounded)
-          dc.b   %1011                  circle etc: allow fill+border+arc
 *--------------------------------------------------------------STRINGS
 stralneu  dc.b   '[1][Please confirm discarding|'
           dc.b   'your work!'
