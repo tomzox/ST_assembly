@@ -31,14 +31,15 @@
  include "f_def.s"
  ;
  XREF  aescall,vdicall,stack
- XREF  msg_buff,bildbuff,wi1,wi_count,rec_adr,menu_adr,nr_vier,win_xy
+ XREF  bildbuff,wi1,wi_count,rec_adr,menu_adr,win_xy
  XREF  last_koo,rsrc_gad,save_scr,set_xx,win_rdw,form_wrt
  XREF  fram_del,form_do,form_del,form_buf
  XREF  frinfobo,frsegmen,frkoordi,frdrucke,frdatei,check_xx,koanztab
  XREF  init_ted,copy_blk,maus_neu,fram_ins,maus_bne
+ XREF  evt_menu_attr,evt_menu_sel,evt_menu_tools
  ;
  XDEF  choofig,chooset,chooseg,drei_chg,get_koos,over_que,directory
- XDEF  alertbox,evt_menu,wind_chg
+ XDEF  alertbox,evt_menu,wind_chg,init_itemslct
  ;
 **********************************************************************
 *   Global register mapping:
@@ -47,28 +48,38 @@
 *   a6   Base address of data section
 **********************************************************************
 
-evt_menu  move.w    msg_buff+6,d1       object index of top-level menu
-          move.w    msg_buff+8,d0       object index of selected entry
-          ;
+evt_menu  move.w    EV_MSG_BUF+6(a6),d1   object index of top-level menu
+          move.w    EV_MSG_BUF+8(a6),d0   object index of selected entry
+          cmp.w     #MEN_TOP_DESK,d1
+          beq       evt_menu_desk
+          cmp.w     #MEN_TOP_FILE,d1
+          beq       evt_menu_file
+          cmp.w     #MEN_TOP_SHAPE,d1
+          beq       evt_menu_shapes
+          cmp.w     #MEN_TOP_ATTR,d1
+          beq       evt_menu_attr
+          cmp.w     #MEN_TOP_SEL,d1
+          beq       evt_menu_sel
+          cmp.w     #MEN_TOP_TOOLS,d1
+          beq       evt_menu_tools
+evt_menu_rts:
+          rts
+
 *---------------------------------------------------------------------
 *               D E S K   M E N U
 *---------------------------------------------------------------------
-          cmp.w     #MEN_TOP_DESK,d1
-          bne.s     nr_zwei
+evt_menu_desk:
           cmp.b     #MEN_IT_ABOUT,d0
           bne.s     evt_menu_rts
           moveq.l   #1,d2
           lea       frinfobo,a2
           bsr       form_do             --- Show "About..." dialog ---
           bra       form_del
-evt_menu_rts:
-          rts
           ;
 *---------------------------------------------------------------------
 *               F I L E   M E N U
 *---------------------------------------------------------------------
-nr_zwei   cmp.w     #MEN_TOP_FILE,d1
-          bne       nr_drei
+evt_menu_file:
           cmp.b     #MEN_IT_QUIT,d0
           bne       new
           bsr       wind_chg            --- Command: Quit ---
@@ -846,8 +857,8 @@ save_op4  move.b    (a0)+,d0            search for start of file name (i.e. afte
 save_op3  lea       filename,a0
 save_op5  move.b    (a2)+,(a0)+         copy file name part of full path/name
           bne       save_op5
-          lea       msg_buff+8,a0       "Save" menu command? (i.e. not "Save as...")
-          cmp.w     #MEN_IT_SAVE,(a0)
+          move.w    EV_MSG_BUF+8(a6),d0  ;"Save" menu command? (i.e. not "Save as...")
+          cmp.w     #MEN_IT_SAVE,d0
           bne.s     save_op7
           move.l    BILD_ADR(a4),a2
           add.w     #32010,a2
@@ -935,9 +946,7 @@ save_dat  move.l    a0,-(sp)            +++ Save image data +++
 *---------------------------------------------------------------------
 *               S H A P E S   M E N U
 *---------------------------------------------------------------------
-          ;
-nr_drei   cmp.w     #MEN_TOP_SHAPE,d1
-          bne       nr_vier
+evt_menu_shapes:
           cmp.b     #MEN_IT_CHK_FILL,d0
           bhs       drei_2e
           move.w    d0,d2               --- Shape selection ---
@@ -1091,6 +1100,27 @@ alertbox  ;
           lea       INTOUT+0(a6),a0
           move.w    (sp)+,d0
           move.w    d0,(a0)             Exit-Taste nach D0
+          rts
+          ;
+init_itemslct:
+          lea       directory,a2        ** Initialitze Items-Selector **
+          move.w    #$19,-(sp)
+          trap      #1                  ;current_disk
+          addq.l    #2,sp
+          add.b     #'A',d0
+          move.b    d0,(a2)+
+          move.b    #':',(a2)+
+          clr.w     -(sp)
+          move.l    a2,-(sp)
+          move.w    #$47,-(sp)          ;get_dir
+          trap      #1
+          addq.l    #8,sp
+getdir1   tst.b     (a2)+
+          bne       getdir1
+          subq.l    #1,a2
+          lea       picname,a0
+getdir2   move.b    (a0)+,(a2)+
+          bne       getdir2
           rts
           ;
 itemslct  lea       directory,a2        ** Item-Selector **
@@ -1270,11 +1300,13 @@ stralovq  dc.b   '[1][You are about to commit the|'
           dc.b   'background'
           dc.b   '][Ok|Cancel]',0
 *------------------------------------------------------------------I/O
+picname   dc.b    '\*.PIC',0
 directory ds.w   35
 filename  dcb.w  7,0
 dta       ds.w   25             ; GEMDOS-internal buffer for directory searches (struct DTA, size 22*2 bytes)
 logo_buf  ds.w   5
 handle    ds.w   1              ; temporary used during load & store
+*----------------------------------------------------------------PRINT
 escfeed   dc.b   27,65,8,0
 eschigh   dc.w   $1b4c,0000,0
 drucktab  dc.b   $ff,$7f,$3f,$1f,$0f,$07,$03,$01

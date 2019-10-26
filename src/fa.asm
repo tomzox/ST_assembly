@@ -31,12 +31,12 @@
  include "f_def.s"
  ;
  XREF  evt_butt,evt_menu,fram_drw,save_buf
- XREF  directory,alertbox,koos_mak,wind_chg
+ XREF  alertbox,koos_mak,wind_chg,init_itemslct
  ;
  XDEF  aescall,vdicall
  XDEF  bildbuff,wi1,rec_adr,win_rdw,show_m,hide_m
  XDEF  save_scr,set_xx,rsrc_gad,vslidrw,wi_count,logbase
- XDEF  fram_del,fram_mod,copy_blk,rand_tab,msg_buff,menu_adr
+ XDEF  fram_del,fram_mod,copy_blk,rand_tab,menu_adr
 
 **********************************************************************
 *   Module structure:
@@ -44,9 +44,10 @@
 *         window event handling, raster-copy sub-function
 *   - FG: Shape graphics handlers: line, rectangle, ... & sub-functions
 *   - FH: ... cntd.: dot, brush, spraycan, rubberband, eraser
-*   - FM: Menu command handler: "About", file menu, Shape selection
-*   - FN: ... cntd: Attributes+Selection+Tools menus
+*   - FM: Menu command handler: desk & file menus, Shape selection
+*   - FN: ... cntd: Attributes, Selection, and Tools menus
 *   - FO: ... cntd: Selection rotate, zoom, distort
+*
 **********************************************************************
 *   Global register mapping:
 *
@@ -70,7 +71,7 @@
           trap      #1
           add.w     #12,sp
           tst.w     d0                  Error -> abort
-          bne       mainrts
+          bne       main_err
           ;
           lea       bildbuff,a0         Address of screen buffer
           move.l    a7,d0
@@ -101,7 +102,7 @@
 
           aes       10 0 1 0 0          ;APPL_INIT
           move.w    INTOUT(a6),APPL_ID(a6)
-          bmi       mainrts
+          bmi       main_err
           aes       77 0 5 0 0          ;GRAF_HANDLE
           move.w    INTOUT(a6),GRHANDLE(a6)
           vdi       100 0 11 1 1 1 1 1 1 1 1 1 1 2
@@ -111,33 +112,12 @@
           lea       rscname,a0
           aes       110 0 1 1 0 !a0 ;rsrc_load
           move.w    INTOUT(a6),d0
-          bne.s     getdir3
-          lea       stralrsc,a0         Error -> notify user
-          moveq.l   #1,d0
-          bsr       alertbox
-          bra       mainrts             exit
-getdir3   moveq.l   #RSC_MENU,d1        Get address of menu object tree
+          beq       main_rcs_err
+          moveq.l   #RSC_MENU,d1        Get address of menu object tree
           bsr       rsrc_gad
           lea       menu_adr,a0
           move.l    ADDROUT(a6),(a0)
-          lea       directory,a2        -- initialitze Itemslct --
-          move.w    #$19,-(sp)
-          trap      #1                  ;current_disk
-          addq.l    #2,sp
-          add.b     #'A',d0
-          move.b    d0,(a2)+
-          move.b    #':',(a2)+
-          clr.w     -(sp)
-          move.l    a2,-(sp)
-          move.w    #$47,-(sp)          ;get_dir
-          trap      #1
-          addq.l    #8,sp
-getdir1   tst.b     (a2)+
-          bne       getdir1
-          subq.l    #1,a2
-          lea       picname,a0
-getdir2   move.b    (a0)+,(a2)+
-          bne       getdir2
+          bsr       init_itemslct       initialize item selector dialog
           move.w    #3,-(sp)            ;get logical screen RAM base
           trap      #14
           addq.l    #2,sp
@@ -173,9 +153,10 @@ getdir2   move.b    (a0)+,(a2)+
           lea       rec_adr,a0                assign to pointer to current window
           move.l    a4,(a0)
           move.b    #-1,SEL_OPT_OVERLAY(a6)   enable selection overlay mode by default
+          ;
 *--------------------------------------------------------EVENT-HANDLER
 evt_multi ;                                   ; wait for message, but max. 70ms
-          lea       msg_buff,a0
+          lea       EV_MSG_BUF(a6),a0
           aes       25 16 7 1 0 %110000 0 0 0 0 0 0 0 0 0 0 0 0 0 70 0 !a0  ;evt_multi
           btst.b    #4,INTOUT+1(a6)     message?
           bne.s     evt_mul1
@@ -201,21 +182,40 @@ evt_mul2  tst.b     MOUSE_LBUT+1(a6)    menu selection -> ignore
           bra       evt_multi
           ;
 evt_mul1  move.l    rec_adr,a4          --- Message ---
-          move.w    msg_buff,d0
+          move.w    EV_MSG_BUF(a6),d0
           cmp.w     #10,d0              menu item selected?
           bne.s     evt_mul4
           bsr       evt_menu
-          aes       33 2 1 1 0 !msg_buff+6 1 !menu_adr  ;menu_tnormal
+          move.w    EV_MSG_BUF+6(a6),d1 ;undo inversion of top-level menu
+          aes       33 2 1 1 0 !d1 1 !menu_adr  ;menu_tnormal
           bra       evt_multi
-          ;
-evt_mul4  pea       evt_multi           push handler address to stack -> "rts" returns to loop
-*-------------------------------------------------------WINDOW-HANDLER
+evt_mul4  ;                             check for window event types
+          pea       evt_multi           push handler address to stack -> "rts" returns to loop
           cmp.w     #20,d0
-          bne       topped              --- WM_Redraw - Procedure ---
-redraw    bsr       hide_m              ;hide_mouse
+          beq       redraw
+          cmp.w     #21,d0
+          beq       topped
+          cmp.w     #22,d0
+          beq       closed
+          cmp.w     #23,d0
+          beq       fulled
+          cmp.w     #24,d0
+          beq       arrowed
+          cmp.w     #25,d0
+          beq       hslid
+          cmp.w     #26,d0
+          beq       vslid
+          cmp.w     #27,d0
+          beq       sized
+          cmp.w     #28,d0
+          beq       moved
+exec_rts  rts
+
+*-------------------------------------------------------WINDOW-HANDLER
+redraw    bsr       hide_m              --- WM_Redraw - Procedure ---
           aes       107 1 1 0 0 1       ;wind_update
-          move.l    msg_buff+8,d0
-          move.l    msg_buff+12,d1
+          move.l    EV_MSG_BUF+8(a6),d0
+          move.l    EV_MSG_BUF+12(a6),d1
           add.l     d0,d1
           sub.l     #$10001,d1
           cmp.w     #400,d1             Correct clipping rectangle
@@ -233,7 +233,7 @@ redraw9   swap      d1
           swap      d4
           swap      d6
           moveq.l   #WIN_STRUCT_CNT-1,d0  ++ Determine window-record ++
-          move.w    msg_buff+6,d2
+          move.w    EV_MSG_BUF+6(a6),d2
           lea       wi1-WIN_STRUCT_SZ,a3
 redraw1   add.w     #WIN_STRUCT_SZ,a3
           cmp.w     (a3),d2             A3: address of window-record
@@ -301,9 +301,7 @@ rw_end    ;
           aes       107 1 1 0 0 0       ;wind_update
           bra       show_m
           ;
-topped    cmp.w     #21,d0
-          bne.s     hslid
-          move.w    msg_buff+6,d3       --- Topped ---
+topped    move.w    EV_MSG_BUF+6(a6),d3   --- Topped ---
           move.w    WIN_HNDL(a4),d2
           cmp.w     d3,d2
           beq.s     topped5             only reactivate window
@@ -333,26 +331,22 @@ topped5   move.w    d3,d1
           moveq.l   #10,d0
           bra       set_xx
           ;
-hslid     cmp.w     #25,d0
-          bne.s     vslid
-          clr.l     d1                  --- horizontal slider ---
-          move.w    msg_buff+8,d1
+hslid     clr.l     d1                  --- horizontal slider ---
+          move.w    EV_MSG_BUF+8(a6),d1
           move.w    #640,d0
           sub.w     FENSTER+4(a4),d0
           mulu      d0,d1
           bsr       divu1000            D1:=D1/1000
           sub.w     FENSTER(a4),d1
           move.w    d1,YX_OFF+2(a4)
-          move.w    msg_buff+8,d1
+          move.w    EV_MSG_BUF+8(a6),d1
           move.w    d1,SCHIEBER(a4)
           moveq.l   #8,d0
           bsr       set_xx              update slider pos.
           bra.s     vslidrw
           ;
-vslid     cmp.w     #26,d0
-          bne       arrowed
-          clr.l     d1                  --- vertical slider ---
-          move.w    msg_buff+8,d1
+vslid     clr.l     d1                  --- vertical slider ---
+          move.w    EV_MSG_BUF+8(a6),d1
           move.w    #400,d0
           sub.w     FENSTER+6(a4),d0
           mulu      d0,d1
@@ -362,7 +356,7 @@ vslid     cmp.w     #26,d0
           lsl.w     #4,d1
           moveq.l   #25,d0
           bsr       divu_d0
-          move.w    msg_buff+8,d1
+          move.w    EV_MSG_BUF+8(a6),d1
           move.w    d1,SCHIEBER+2(a4)
           moveq.l   #9,d0               update slider pos.
           bsr       set_xx
@@ -397,11 +391,9 @@ vslidrw2  add.l     YX_OFF+2(a0),d0
           bsr       fram_drw
 vslidrw3  bra       show_m
           ;
-arrowed   cmp.w     #24,d0
-          bne       sized
-          move.l    #400,d2             D2: max. Y-Offset
+arrowed   move.l    #400,d2             D2: max. Y-Offset
           sub.w     FENSTER+6(a4),d2
-          move.w    msg_buff+8,d0       --- Scrollbar or scrolling arrows ---
+          move.w    EV_MSG_BUF+8(a6),d0   --- Scrollbar or scrolling arrows ---
           cmp.b     #3,d0
           bne.s     arrowed1
           move.w    YX_OFF(a4),d1       -- scroll up by one pixel --
@@ -497,27 +489,21 @@ arrowed7  cmp.b     #5,d0
           bsr       set_xx
           bra       vslidrw
           ;
-sized     cmp.w     #27,d0
-          bne.s     moved
-          move.l    msg_buff+8,INTIN+4(a6)    --- Change of window size ---
-          move.l    msg_buff+12,INTIN+8(a6)
+sized     move.l    EV_MSG_BUF+8(a6),INTIN+4(a6)    --- Change of window size ---
+          move.l    EV_MSG_BUF+12(a6),INTIN+8(a6)
           aes       105 6 1 0 0 !(a4) 5   ;wind_set
           aes       108 6 5 0 0 1 $fef  ;wind_calc
           move.l    INTOUT+6(a6),d3
           bra       sizedsub
           ;
-moved     cmp.w     #28,d0
-          bne.s     fulled
-          move.l    msg_buff+8,INTIN+4(a6)    --- Moving window ---
-          move.l    msg_buff+12,INTIN+8(a6)
+moved     move.l    EV_MSG_BUF+8(a6),INTIN+4(a6)    --- Moving window ---
+          move.l    EV_MSG_BUF+12(a6),INTIN+8(a6)
           aes       105 6 1 0 0 !(a4) 5  ;wind_set
           aes       108 6 5 0 0 1 $fef   ;wind_calc
           move.l    INTOUT+2(a6),d3
           bra       movedsub
           ;
-fulled    cmp.w     #23,d0
-          bne       closed
-          move.l    FENSTER(a4),d0      --- Maximize window ---
+fulled    move.l    FENSTER(a4),d0      --- Maximize window ---
           move.l    FENSTER+4(a4),d1
           cmp.l     maxwin,d0
           bne.s     fulled3
@@ -540,9 +526,7 @@ fulled2   move.l    d3,INTIN+4(a6)
           move.l    d4,d3
           bra       sizedsub
           ;
-closed    cmp.w     #22,d0
-          bne       exec_rts
-          bsr       wind_chg            --- Close window ---
+closed    bsr       wind_chg            --- Close window ---
           beq.s     closed5
           lea       straldel,a0
           moveq.l   #1,d0
@@ -594,14 +578,14 @@ closed1   add.w     #WIN_STRUCT_SZ,a4
           bsr       prep_men            Set state of "Save" menu entry
           move.w    wi_count,d0
           cmp.w     #6,d0
-          blo.s     exec_rts
+          blo       exec_rts
           move.l    menu_adr,a3         enable accessories
           add.w     #MEN_IT_ACC0*RSC_OBJ_SZ+11,a3
           moveq.l   #5,d0
 closed4   bclr.b    #3,(a3)
           add.w     #RSC_OBJ_SZ,a3
           dbra      d0,closed4
-exec_rts  rts
+          rts
           ;
 closed2   moveq.l   #MEN_IT_DISC,d0     all windows closed -> disable menu entries
           bsr       men_idis            disble "discard"
@@ -617,6 +601,7 @@ absmod    move.l    rec_adr,a4          ** Switch into full-screen mode **
           bmi       evt_multi
           bsr       swap_buf
           bsr       hide_m
+          aes       30 1 1 1 0 0 !menu_adr    ;menu_bar
           move.w    #-1,-(sp)           resolution unchanged
           move.l    bildbuff,-(sp)      phys. screen := logical screen
           move.l    bildbuff,-(sp)
@@ -626,7 +611,7 @@ absmod    move.l    rec_adr,a4          ** Switch into full-screen mode **
           bsr       show_m
           move.l    a4,-(sp)            save address of window record
           move.l    BILD_ADR(a4),a0
-          lea       wiabs,a4
+          lea       wiabs,a4            switch to dummy window record
           lea       rec_adr,a1
           move.l    a4,(a1)
           move.l    bildbuff,BILD_ADR(a4)
@@ -641,12 +626,12 @@ absmod3   tst.w     MOUSE_RBUT(a6)      +++ loop +++
           beq       absmod3
           move.l    rec_adr,a4
           bsr       evt_butt
-absmod6   tst.b     MOUSE_LBUT(a6)
+absmod6   tst.b     MOUSE_LBUT+1(a6)    busy loop until left mouse button is released
           bne       absmod6
           clr.w     MOUSE_LBUT(a6)
           bra       absmod3
           ;
-absmod4   bsr       hide_m              +++ Previous screen +++
+absmod4   bsr       hide_m              +++ Leaving full-screen mode +++
           bsr       swap_buf
           move.w    #-1,-(sp)
           move.l    logbase,-(sp)
@@ -660,10 +645,11 @@ absmod4   bsr       hide_m              +++ Previous screen +++
           lea       rec_adr,a0
           move.l    (sp)+,a4
           move.l    a4,(a0)
-absmod5   tst.b     MOUSE_RBUT(a6)
+absmod5   tst.b     MOUSE_RBUT(a6)      busy loop until right mouse button is released
           bne.s     absmod5
           clr.w     MOUSE_RBUT(a6)
           bsr       win_rdw
+          aes       30 1 1 1 0 1 !menu_adr    ;menu_bar
           bra       evt_multi
 *--------------------------------------------------------SUB-FUNCTIONS
 hide_m    move.l    #$7b0000,CONTRL+0(a6)       hide_cursor
@@ -691,7 +677,7 @@ get_top   move.l    rec_adr,a1          ** Return handle of top-level window **
           ;
 win_rdw   bsr       get_top             ** Redraw screen **
           beq       vslidrw             redraw top-level window
-          lea       msg_buff,a0
+          lea       EV_MSG_BUF(a6),a0
           move.w    (a1),6(a0)
           move.l    FENSTER(a1),8(a0)
           move.l    FENSTER+4(a1),12(a0)
@@ -712,9 +698,14 @@ divu_d0   cmp.l     d0,d1               ** D1 := D1 / D0 **
 divu_d01  divu      d0,d1
 divu_d02  rts
           ;
-mainrts   clr.w     -(sp)               ** Error -> abort program **
+main_rcs_err:
+          lea       stralrsc,a0         ** Error loading AES resource file **
+          moveq.l   #1,d0
+          bsr       alertbox            notify user (most likely RCS file is missing)
+          ;fall-through
+main_err  clr.w     -(sp)               ** Error initialization -> exit program **
           trap      #1
-          bra       mainrts
+          bra       main_err
           ;
 maus_kno  subq.l    #4,sp               ** Mouse button interrupt **
           movem.l   a0/a6,-(sp)
@@ -816,10 +807,9 @@ fram_de3  clr.w     SEL_STATE(a6)
           rts
 fram_de2  clr.w     SEL_STATE(a6)       no
           move.l    #-1,SEL_FRM_X2Y2(a6)
-          move.w    msg_buff+6,-(sp)
+          move.w    EV_MSG_BUF+6(a6),-(sp)
           bsr       win_rdw             -> redraw image
-          lea       msg_buff+6,a0
-          move.w    (sp)+,(a0)
+          move.w    (sp)+,EV_MSG_BUF+6(a6)
           movem.l   (sp)+,a1-a4/d2-d7
           rts
           ;
@@ -1157,14 +1147,9 @@ wi1       dc.w    -1,0,0,0,0,0,0,0,-40,-03,0,03,40,614,337,0,0,959,887
           dc.w    -1,0,0,0,0,0,0,0,-40,-35,0,35,40,582,337,0,0,909,887
           dc.w    -1,0,0,0,0,0,0,0,-40,-43,0,43,40,574,337,0,0,897,887
           dc.w    -1,0,0,0,0,0,0,0,-40,-51,0,51,40,566,337,0,0,884,887
-wiabs     dc.w    -1,0,0,0,0,0,0,0,0,0,0,0,0,640,320,-1,-1
+wiabs     dc.w    -1,0,0,0,0,0,0,0,0,0,0,0,0,640,400,-1,-1
 *--------------------------------------------------------------STRINGS
-msg_buff  ds.w    10    ; message buffer filled by AES evnt_multi/evnt_mesag
-                        ; 0= event ID (e.g. 20=WM_REDRAW)
-                        ; 2= AES app.ID.; rest depends on event ID
-*--------------------------------------------------------------STRINGS
-rscname   dc.b    'FA.RSC',0,'FREE!!'
-picname   dc.b    '\*.PIC',0
+rscname   dc.b    'FA.RSC',0
 stralrsc  dc.b    '[3][Failed to load resource file|'
           dc.b    '"FA.RSC"][Exit]',0             ; ATTN: keep equal with "rscname"
 straldel  dc.b    '[1][You are discarding your|'

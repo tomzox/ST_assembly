@@ -31,17 +31,18 @@
  include "f_def.s"
  ;
  XREF  aescall,vdicall
- XREF  msg_buff,bildbuff,rec_adr,menu_adr,koanztab
+ XREF  bildbuff,rec_adr,menu_adr,koanztab
  XREF  show_m,hide_m,save_scr,win_rdw,rsrc_gad,set_xx,drei_chg
  XREF  save_buf,win_abs,choofig,copy_blk,win_xy,koos_mak,alertbox
  XREF  rand_tab,logbase,get_koos,over_que,fram_del,fuenf_4c,koostr1
  ;
  XDEF  chootxt,chooras,choopat,frraster,frinfobo,frsegmen
  XDEF  frkoordi,frmodus,frpunkt,frpinsel,frsprayd,frmuster,frtext
- XDEF  frradier,frlinie,frdrucke,frdatei,nr_vier,check_xx
+ XDEF  frradier,frlinie,frdrucke,frdatei,check_xx
  XDEF  work_blk,form_do,form_del,form_buf,form_wrt,frzeiche
  XDEF  chookoo,work_bl2,init_ted,maus_neu,over_beg,over_old
  XDEF  maus_bne,cent_koo,over_cut,frrotier,frzerren,frzoomen,frprojek
+ XDEF  evt_menu_attr
  ;
 **********************************************************************
 *   Global register mapping:
@@ -53,8 +54,7 @@
 *---------------------------------------------------------------------
 *               A T T R I B U T E S   M E N U
 *---------------------------------------------------------------------
-nr_vier   cmp.w     #MEN_TOP_ATTR,d1
-          bne       nr_fuenf
+evt_menu_attr:
           cmp.b     #MEN_IT_CFG_MOUS,d0
           blo.s     vier_3f
           lea       choomou,a2          --- Mouse form attribute ---
@@ -227,8 +227,7 @@ attrib12  bsr       form_del
 *               S E L E C T I O N   M E N U
 *---------------------------------------------------------------------
           ;
-nr_fuenf  cmp.w     #MEN_TOP_SEL,d1
-          bne       nr_sechs
+evt_menu_sel:
           cmp.b     #MEN_IT_CHK_SEL,d0
           bne.s     fuenf_48
           move.w    d0,d2               --- Selection on/off ---
@@ -703,8 +702,7 @@ spiver3   cmp.w     #-1,d4
 *---------------------------------------------------------------------
 *               T O O L S   M E N U
 *---------------------------------------------------------------------
-nr_sechs  cmp.w     #MEN_TOP_TOOLS,d1
-          bne       evt_menu_rts2
+evt_menu_tools:
           cmp.b     #MEN_IT_CHK_COOR,d0
           bne.s     sechs_5c
           move.w    d0,d7               --- Command: Store mouse coords. ---
