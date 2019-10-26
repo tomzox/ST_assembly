@@ -156,24 +156,7 @@ segmen1   lea       chooset+6,a0        no -> check-off "arc" entry
 *               A T T R I B U T E S   M E N U
 *---------------------------------------------------------------------
 evt_menu_attr:
-          cmp.b     #MEN_IT_CFG_MOUS,d0
-          blo.s     vier_3f
-          lea       choomou,a2          --- Mouse form attribute ---
-          not.b     1(a2)
-          bsr       maus_neu
-          move.l    menu_adr,a1
-          add.w     #MEN_IT_CFG_MOUS*RSC_OBJ_SZ+12,a1  ;A1: address of menu item string
-          tst.w     (a2)
-          beq.s     mausel1
-          move.l    (a1),2(a2)          pre-select shape "cross"
-          addq.l    #6,a2
-          move.l    a2,(a1)
-          rts
-mausel1   move.l    2(a2),(a1)          pre-select shape "arrow"
-evt_menu_rts2:
-          rts
-          ;
-vier_3f   cmp.b     #MEN_IT_CFG_WIN,d0
+          cmp.b     #MEN_IT_CFG_WIN,d0
           bne.s     vier_33
           moveq.l   #1,d0               --- Window attribute ---
           lea       stralfat,a0
@@ -322,6 +305,7 @@ attrib23  moveq.l   #-1,d1              wait for release of mouse button
           bra       attrib13
           ;
 attrib12  bsr       form_del
+evt_menu_rts2:
           rts
           ;
 *---------------------------------------------------------------------
@@ -643,7 +627,7 @@ sechs_59  cmp.b     #MEN_IT_SHOW_COO,d0
           eor.b     #1,d1
           move.w    d1,(a0)
           move.w    #$777,2(a0)
-          bsr.s     check_xx
+          bsr       check_xx
           move.w    chookoo,d0
           bne       koos_mak            display & rts
           ;
@@ -669,7 +653,23 @@ koord1    lea       koanztab,a0
           ;beq.s     koords              cancel
 koord2    rts
 
-sechs_57  rts                           --- Zoom View ---
+sechs_57  cmp.b     #MEN_IT_CFG_MOUS,d0
+          blo.s     sechs_58
+          lea       choomou,a2          --- Mouse form attribute ---
+          not.b     1(a2)               toggle between 0 (arrow) and 255 (user-defined)
+          bsr       maus_neu
+          move.w    #MEN_IT_CFG_MOUS,d0
+          move.w    choomou,d1
+          and.w     #1,d1
+          bra       check_xx
+          ;
+sechs_58  cmp.b     #MEN_IT_FULL_SCR,d0
+          blo.s     sechs_55
+          lea       stralabs,a0
+          moveq.l   #1,d0
+          bra       alertbox
+          ;
+sechs_55  rts                           --- Zoom View ---
 
 *---------------------------------------------------------SUBFUNCTIONS
 
@@ -1174,8 +1174,6 @@ choopat   dc.w    $aaaa                 ; bitmask of user-defined line pattern
 chooras   dc.w    0                     ; flag: grid mode enabled?
 chootxt   dc.w    0
 choomou   dc.w    0                     ; flag: 0:=normal mouse shape; $ff:cross
-          dc.w    0,0                   ; address of "Cross" menu item text
-          dc.b    '  Pfeil-Maus',0      ; alternative menu item text
 chookoo   dc.w    0                     ; flag: 0:disabled; 1:enable mouse coord. display in menu bar
           dc.w    -1,-1                 ; last written mouse X/Y coords.
 choofil   dcb.w   16,0                  ; bitmasks of user-defined fill pattern
@@ -1199,6 +1197,10 @@ stralovn  dc.b    '[3][Not enough free memory'
 stralcut  dc.b    '[1][The part of selection outside|'
           dc.b    'of the window will be lost!'
           dc.b    '][Ok|Cancel]',0
+stralabs  dc.b    '[1][Click with the right mouse|'
+          dc.b    'button into a window for|'
+          dc.b    'toggling full-screen mode'
+          dc.b    '][Ok]',0
 *-------------------------------------------------------DIALOG-STRUCTS
 *   Ok-Nr, { TED-Nr,L„nge-1,Default,Index*256+min,max,Offset.l } ,-1,
 *          { Button-Nr*256+selected Button } ,0
