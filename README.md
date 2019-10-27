@@ -19,18 +19,13 @@ wrote these programs before I ever used a structured programming language.)
 
 ![Screenshot](images/screenshot_paint.png)
 
-This is a pretty standard bitmap-based painting program. It offers all the
-usual drawing tools, such as pencil, brush, straight lines & rectangles - some
-neat variants and extensions are available via the "Attributes" menu though.
-Naturally the program also offers selecting areas of the images, and then
-moving these, or performing transformations.  (Currently only mirroring and
-zooming transformations are implemented.) The program contains a printer driver
-for the _Gemini Star_ dot matrix printer.
-
-In first order the program is a showcase for all the graphics operations the
-ATARI GEM's "GDI" offered (e.g drawing lines, circles and text in various
-variations), in particular while exhausting all the possible variations (e.g.
-the XOR painting mode).
+This is a basic bitmap-based painting program. It offers all the usual drawing
+tools, such as pencil, brush, straight lines & rectangles - some neat variants
+and extensions are available via the "Attributes" menu though. Naturally the
+program also offers selecting areas of the images, and then moving these, or
+performing transformations.  (Currently only mirroring and zooming
+transformations are implemented.) The program contains a printer driver for the
+_Gemini Star_ dot matrix printer.
 
 The program is described in detail in the [TH-Paint documentation](docs/paint.md)
 
@@ -43,11 +38,11 @@ text-based application without GUI. The text editor is the central part, but I
 integrated almost everything that I needed for development, thus creating
 what's called today an "Integrated Development Environment" (IDE).
 
-The screenshot above shows the starting message on top of the screen. The the
+The screenshot above shows the starting message on top of the screen. Then the
 current directory is listed and a 3-line text file is loaded and listed. Then
 it demonstrates what "line based editing means" by showing how the first text
 line with number 10 is moved to 25 and what the result looks like. (Note the
-symbols you see at line ends are the line-feed and carriage-return characters.)
+symbols visible at line ends are the line-feed and carriage-return characters.)
 
 The program is described in detail in the [Text Editor documentation](docs/editor.md)
 
@@ -69,9 +64,9 @@ Becker.
 The resource files `fa_en.rsc` and `fa_de.rsc` (containing definition of the
 menu and dialog boxes) were originally created using the DRI Resource Editor.
 For current updates I used the freely available tool "Interface" (by Gerd
-Hoeller, version 2.33 vom 03.10.1994).  Unfortunately the tools do not support
-multiple columns as used in the "Shapes" menu, so I additionally used a
-hex-editor to patch X/Y coordinates.
+Hoeller, version 2.33 released 03.10.1994). Unfortunately the tools do not
+support multiple columns as used in the "Shapes" menu, so I additionally used a
+hex-editor to patch X/Y coordinates of those menu entries.
 
 The assembly code was originally written for the "GST 68000 Macro Assembler
 A246V040". I still found a mention in a
@@ -80,8 +75,8 @@ but otherwise the company seems to have disappeared and no documentation is to
 be found anywhere on the Internet. Fortunately the assembly syntax seems to be
 the official Motorola syntax and thus supported by many other assemblers (e.g.
 [vasm](http://sun.hasenbraten.de/vasm/) parses it just fine).  However the
-macros used for system calls are not portable. I added a Perl script that
-generates codes for these specific macros.
+macros used for system calls are not portable. I added a little Perl script
+`asm_macro.pl` that generates codes for these specific macros.
 
 ## Building the programs
 
@@ -90,7 +85,7 @@ To build the software simply type "make".
 Pre-requisite for building is [vasm](http://sun.hasenbraten.de/vasm/)
 configured for CPU=m68k SYNTAX=mot. Since vasm does not come with a linker, the
 assembly source modules are all concatenated to single files for assembling &
-immediately craeting TOS binaries.
+immediately creating TOS binaries.
 
 For running the generated executables I used [HATARI](https://hatari.tuxfamily.org/).
 Pre-requisite is a [TOS image](https://www.google.com/search?q=Atari+TOS-1.04)
