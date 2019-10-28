@@ -513,7 +513,7 @@ markier2  add.w     win_xy+8,d5         convert coords. to abs.
           bra.s     markier5
 markier7  moveq.l   #MEN_IT_SEL_PAST,d0 ;copy mode -> disable "paste (selection)" menu entry
           bsr       men_idis
-markier5  moveq.l   #7,d2               enable all selection menu commands
+markier5  moveq.l   #6,d2               enable all selection menu commands
 markier3  move.l    d2,d0
           add.l     #MEN_IT_SEL_ERA,d0
           bsr       men_iena
@@ -890,11 +890,11 @@ schub7    move.l    d2,24(a3)           24: source coord.
           bmi.s     schub5
           bsr       save_buf
 schub5    move.l    SEL_OV_BUF(a6),16(a3)   16: background source address
-          move.l    bildbuff,20(a3)     20: selection image source
+          move.l    bildbuff,20(a3)     20: selection image source = backup buffer
           bra.s     schub4
 schub9    move.l    bildbuff,16(a3)     + NORM-Mode +
-          move.l    BILD_ADR(a4),20(a3)
-          tst.b     SEL_TMP_OVERLAY(a6) overlay mode temporaily enabled?
+          move.l    BILD_ADR(a4),20(a3) 20: selection image source = image buffer
+          tst.b     SEL_TMP_OVERLAY(a6) overlay mode temporarily enabled?
           bne.s     schub4              -> keep old background
           bsr       save_buf
           tst.b     SEL_OPT_COPY(a6)    copy mode?
@@ -915,7 +915,7 @@ schub2    lea       stack,a3            +++ Loop +++
           move.l    (a3),d3
           bsr       noch_qu
           bsr       hide_m
-          tst.b     MOUSE_LBUT+1(a6)    done?
+          tst.b     MOUSE_LBUT+1(a6)    mouse button released?
           beq.s     schub3
 schub8    move.l    d3,-(sp)            ++ Restore ++
           spl.b     12(a3)
@@ -944,7 +944,7 @@ schub8    move.l    d3,-(sp)            ++ Restore ++
           bsr       show_m
           bra       schub2
           ;
-schub3    move.l    rec_adr,a2          +++ End +++
+schub3    move.l    rec_adr,a2          +++ finalize move +++
           move.b    SEL_OPT_OVERLAY(a6),d0
           bne.s     schub20
           move.w    YX_OFF+0(a2),d0       + NORM mode +

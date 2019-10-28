@@ -39,7 +39,7 @@
  XDEF  choofig,chootxt,chooras,choopat,frraster,frinfobo,frsegmen
  XDEF  frkoordi,frmodus,frpunkt,frpinsel,frsprayd,frmuster,frtext
  XDEF  frradier,frlinie,frdrucke,frdatei,check_xx
- XDEF  work_blk,form_do,form_del,form_buf,form_wrt,frzeiche
+ XDEF  form_do,form_del,form_buf,form_wrt,frzeiche
  XDEF  chookoo,work_bl2,init_ted,maus_neu,over_beg,over_old
  XDEF  maus_bne,cent_koo,over_cut,frrotier,frzerren,frzoomen,frprojek
  XDEF  evt_menu_attr,evt_menu_shapes
@@ -156,14 +156,7 @@ segmen1   lea       chooset+6,a0        no -> check-off "arc" entry
 *               A T T R I B U T E S   M E N U
 *---------------------------------------------------------------------
 evt_menu_attr:
-          cmp.b     #MEN_IT_CFG_WIN,d0
-          bne.s     vier_33
-          moveq.l   #1,d0               --- Window attribute ---
-          lea       stralfat,a0
-          bsr       alertbox            "not implemented yet"
-          rts
-          ;
-vier_33   sub.b     #MEN_IT_CFG_COMB,d0 ;--- Attribute dialog windows ---
+          sub.b     #MEN_IT_CFG_COMB,d0 ;--- Attribute dialog windows ---
           move.w    d0,d2
           add.w     #5,d2
           lsl.w     #2,d0
@@ -472,7 +465,7 @@ einfug3   bsr       copy_blk
           clr.b     SEL_PREV_COMB(a6)
 einfug4   move.l    menu_adr,a0         ; enable "erase" and following menu entries
           add.w     #MEN_IT_SEL_ERA*RSC_OBJ_SZ+11,a0
-          moveq.l   #7,d0
+          moveq.l   #6,d0
 einfug1   bclr.b    #3,(a0)
           add.w     #RSC_OBJ_SZ,a0
           dbra      d0,einfug1
@@ -767,7 +760,7 @@ over_al2  clr.b     SEL_OPT_OVERLAY(a6)
 over_beg  move.w    #1999,d0            ** Prepare overlay mode **
           move.l    rec_adr,a0
           move.l    BILD_ADR(a0),a0
-          move.l    SEL_OV_BUF(a6),a1
+          move.l    SEL_OV_BUF(a6),a1   copy original image to OV-buffer
 over_be1  move.l    (a0)+,(a1)+
           move.l    (a0)+,(a1)+
           move.l    (a0)+,(a1)+
@@ -776,7 +769,8 @@ over_be1  move.l    (a0)+,(a1)+
           tst.b     SEL_OPT_COPY(a6)    copy?
           bne       evt_menu_rts2
           move.l    SEL_OV_BUF(a6),a0
-          clr.w     d3
+          clr.w     d3                  combination mode Z=0 -> erase selection frame from OV buffer
+          ;fall-through
           ;
 work_blk  move.l    SEL_FRM_X1Y1(a6),d0       ** Execute raster copy via VDI **
           move.l    SEL_FRM_X2Y2(a6),d1
@@ -1179,7 +1173,7 @@ chookoo   dc.w    0                     ; flag: 0:disabled; 1:enable mouse coord
 choofil   dcb.w   16,0                  ; bitmasks of user-defined fill pattern
 *--------------------------------------------------------------STRUCTS
 comb_dat  dc.b    0,1,6,7,2,11,4,13,14,9,8
-work_dat  dc.w    0,15,10
+work_dat  dc.w    0,15,10               ; raster copy combination mode: Z=0;Z=1;Z=!Q
 mfdb_q    dc.w    0000,0000,00,00,40,0,1,0,0,0
           dc.w    0000,0000,00,00,40,0,1,0,0,0
 maus_blk  dc.w    7,7,1,0,1,$fffe,$fffe,$c386,$c386,$c386,$c386,$fc7e
@@ -1189,9 +1183,6 @@ maus_blk  dc.w    7,7,1,0,1,$fffe,$fffe,$c386,$c386,$c386,$c386,$fc7e
 *--------------------------------------------------------------STRINGS
 stralspi  dc.b    '[0][Mirror around which axis?| |'
           dc.b    '][Horizontal|Cancel|Vertical]',0
-stralfat  dc.b    '[3][Sorry, this feature is|'
-          dc.b    'not yet implemented.'
-          dc.b    '][Cancel]',0
 stralovn  dc.b    '[3][Not enough free memory'
           dc.b    '][Cancel]',0
 stralcut  dc.b    '[1][The part of selection outside|'

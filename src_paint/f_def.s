@@ -73,6 +73,7 @@ SEL_TMP_OVERLAY   equ  393  ; dc.b ; temporary overlay mode, used after pasting 
 SEL_FLAG_DEL      equ  395  ; dc.b ; delete old selection before move?
 SEL_OPT_OVERLAY   equ  396  ; dc.b ; overlay mode? (i.e. selection not copied into image until sel. is fully released)
 SEL_OV_BUF        equ  398  ; dc.l ; Addresss of buffer for overlay mode, else 0
+                  ;                  contains a copy of the image *excluding* the selected area
 SEL_FLAG_CHG      equ  402  ; dc.b ; modified?
 SEL_FLAG_CUTOFF   equ  403  ; dc.b ; selection only partially visible? (due to cut-off at screen border)
                             ;        tri-state: 0:no $7f:??  $ff:??
@@ -193,33 +194,30 @@ MEN_IT_CFG_ERA  equ $3a
 MEN_IT_CFG_LINE equ $3b
 MEN_IT_CFG_PRT  equ $3d
 MEN_IT_CFG_FILE equ $3e
-MEN_IT_CFG_WIN  equ $3f
-;MEN_IT_CFG_MOUS equ $41
 
-MEN_IT_CHK_SEL  equ $41         ; SELECTION menu entries
-MEN_IT_SEL_PAST equ $42
-MEN_IT_SEL_DISC equ $43
-MEN_IT_SEL_COMI equ $44
-MEN_IT_SEL_ERA  equ $46
-MEN_IT_SEL_BLCK equ $47
-MEN_IT_SEL_INV  equ $48
-MEN_IT_SEL_MIRR equ $49
-MEN_IT_SEL_ROT  equ $4a
-MEN_IT_SEL_ZOOM equ $4b
-MEN_IT_SEL_DIST equ $4c
-MEN_IT_SEL_PROJ equ $4d
-MEN_IT_SEL_COPY equ $4f
-MEN_IT_SEL_COMB equ $50
-MEN_IT_SEL_OVL  equ $51
+MEN_IT_CHK_SEL  equ $40         ; SELECTION menu entries
+MEN_IT_SEL_PAST equ $41
+MEN_IT_SEL_DISC equ $42
+MEN_IT_SEL_COMI equ $43
+MEN_IT_SEL_ERA  equ $45
+MEN_IT_SEL_BLCK equ $46
+MEN_IT_SEL_INV  equ $47
+MEN_IT_SEL_MIRR equ $48
+MEN_IT_SEL_ROT  equ $49
+MEN_IT_SEL_ZOOM equ $4a
+MEN_IT_SEL_DIST equ $4b
+MEN_IT_SEL_PROJ equ $4c
+MEN_IT_SEL_COPY equ $4e
+MEN_IT_SEL_COMB equ $4f
+MEN_IT_SEL_OVL  equ $50
 
-MEN_IT_CHK_COOR equ $53         ; TOOLS menu entries
-MEN_IT_COORDS   equ $54
-MEN_IT_VIEW_ZOM equ $55
-MEN_IT_FULL_SCR equ $56
-MEN_IT_CFG_MOUS equ $58
-MEN_IT_SHOW_COO equ $59
-MEN_IT_CHK_GRID equ $5a
-MEN_IT_CFG_GRID equ $5c
-
+MEN_IT_CHK_COOR equ $52         ; TOOLS menu entries
+MEN_IT_COORDS   equ $53
+MEN_IT_VIEW_ZOM equ $54
+MEN_IT_FULL_SCR equ $55
+MEN_IT_CFG_MOUS equ $57
+MEN_IT_SHOW_COO equ $58
+MEN_IT_CHK_GRID equ $59
+MEN_IT_CFG_GRID equ $5b
 
  endif /* __F_DEF_S */

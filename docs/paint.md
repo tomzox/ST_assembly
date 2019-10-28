@@ -71,6 +71,16 @@ area directly, but rather change the way selection operates:
 | Combine | Open a dialog where you can select combination modes between selection frame content and the background layer (i.e. the rest of the image on top of which the selection frame resides). By default the selection is opaque. In all other modes the content of the selection frame changes whenever you move it. Note in overlay mode the result of combination is not copied to the selection layer, which means the actual selection content remains unchanged until you end the selection; at that time the result of the last combination is copied into the image. |
 | Overlay Mode | This option is enabled by default. When *enabled* and a selection is started, the selected region of the image is cut out of the image and copied into a separate layer. When the selection frame is moved or otherwise modified, the rest of the image is not affected. Only when the selection is ended the selection frame content is copied into the image. When *disabled* the selection content is copied back into the image immediately after moving it (i.e. upon releasing the mouse button) or after any transformation. This is useful only in special cases, such as when working with combination modes such as XOR. |
 
+The following table explains the combination modes supported by selections:
+
+| Mode      | Description |
+|:----------|:------------|
+| Z := Q             | The selection layer is inserted on top of the image without combining with the background image. |
+| Z := Q AND Z       | Pixels are set only if set in the background and the selection image. |
+| Z := Q XOR Z       | Pixels are set at a position if they are set in the corrsponding position either in selection or the background, but not both. For example if your selection is entirely black, the selection frame will show the inverse of the background. |
+| Z := Q OR Z        | Pixels are set if they are set at that position either in the selection or the background image. This mode is equivalent to "transparent" combination mode for filled shapes (see above). |
+| others | Similar as above, but using inverted pixel of either selection (Q), background (Z), or combination result. |
+
 ## Undo operation
 
 TH-paint supports undoing only the very last drawing operation. When using

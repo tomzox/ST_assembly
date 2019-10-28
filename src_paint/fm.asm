@@ -416,11 +416,12 @@ regen12   move.l    (a0)+,(a1)+
           move.l    SEL_FRM_X2Y2(a6),UNDO_SEL_X2Y2(a6)
           move.l    d1,d2
           sub.l     d0,d2
-          move.l    d0,4(a0)
-          move.l    d2,8(a0)
-          move.l    d0,24(a0)
-          move.l    d1,28(a0)
-          move.b    SEL_OPT_COPY(a6),12(a0)
+          lea       stack,a3
+          move.l    d0,4(a3)
+          move.l    d2,8(a3)
+          move.l    d0,24(a3)
+          move.l    d1,28(a3)
+          move.b    SEL_OPT_COPY(a6),12(a3)
           ;move.b    SEL_PREV_COMB(a6),SEL_OPT_COPY(a6)  ; FIXME does not make sense to change config, esp. without updating menu item state!
           tst.b     SEL_FLAG_CUTOFF(a6)     ;clipping status
           beq.s     regen13
@@ -443,11 +444,11 @@ regen16   move.w    SEL_FRM_X1Y1+2(a6),d0
           swap      d1
           move.w    d1,SEL_PREV_X2Y2+2(a6)
 regen14   move.l    SEL_PREV_X1Y1(a6),d0
-          move.l    SEL_PREV_X2Y2(a6),28(a0)
+          move.l    SEL_PREV_X2Y2(a6),28(a3)
           add.l     SEL_PREV_OFFSET(a6),d0
-          move.l    d0,24(a0)
+          move.l    d0,24(a3)
 regen13   move.l    BILD_ADR(a4),a1
-          move.l    bildbuff,20(a0)
+          move.l    bildbuff,20(a3)
           lea       win_xy,a0
           clr.l     (a0)+
           move.l    #$27f018f,(a0)
@@ -485,7 +486,7 @@ regen1    move.l    (a0),d0
           move.w    #$ff00,SEL_FLAG_PASTABLE(a6)
           moveq.l   #MEN_IT_SEL_PAST,d0 ;enable "paste (selection)" menu entry
           bsr       men_iena
-regen7    moveq.l   #7,d2
+regen7    moveq.l   #6,d2
 regen3    move.l    d2,d0
           add.l     #MEN_IT_SEL_ERA,d0 ;disable all selection commands
           bsr       men_idis
@@ -496,8 +497,8 @@ regen4    move.l    menu_adr,a0         ++ Generated frame ++
           move.b    SEL_OPT_OVERLAY(a6),d0
           beq.s     regen6
           bclr.b    #3,MEN_IT_SEL_PAST*RSC_OBJ_SZ+11(a0)  ;enable "paste" menu entry
-          bclr.b    #3,MEN_IT_SEL_PAST*RSC_OBJ_SZ+11(a0)  ;enable "discard" menu entry
-regen6    moveq.l   #7,d2
+          bclr.b    #3,MEN_IT_SEL_DISC*RSC_OBJ_SZ+11(a0)  ;enable "discard" menu entry
+regen6    moveq.l   #6,d2
 regen5    move.l    d2,d0
           add.l     #MEN_IT_SEL_ERA,d0  ;Enable all selection commands
           bsr       men_iena
