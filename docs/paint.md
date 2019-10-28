@@ -24,13 +24,62 @@ menu directly. This is covered in detail in the following table.
 | Text | After clicking into the image with the mouse, text characters can by typed using the keyboard and will appear to the right of the clicked mouse position. The `Backspace` key can be used to erase the last typed character (within the current line; use `Undo` to remove all lines of text). The `Return` key starts a new line one row below the original position of the mouse click. Text attributes need to be configured before starting to enter text (i.e. they will apply only after defining a new start position with another mouse click.) In addition to text attributes, all the combination modes can be applied; In particular in transparent mode the text area is not filled with background color before drawing the characters. Text entry is ended when clicking with the mouse outside of the image area (e.g. on the window title bar). |
 | Eraser | Draws a white square around the mouse positon. When the mouse is dragged the square keeps being drawn around each new position. The color and size are configurable. |
 | Rubberband | The shape only draws when the mouse is dragged. Then it draws a line from the position of the original position where the mouse button was pressed to the latest position of the mouse. All the regular line attributes (width, color, pattern, line end styles) are applied. XOR combination mode can be applied, but the same caveat as for pencil applies. |
-| Line | With the line shape (and all following shapes) drawing is done in two phases: At first, while the mouse button is kept pressed, only a dotted line is drawn between the original and current mouse position. This line only serves to mark where the line will be drawn. Once the mouse button is released, the dotted line is removed and the actual line is drawn using the configured color, width, line pattern and start/end style attributes. The XOR combination mode attribute also is applicable. |
-| Rectangle | While the mouse button is kept pressed, a dotted rectangle between the original and current mouse positions is drawn (where the two mouse positions define opposite corners of the rectangle). Once the mouse button is released, the dotted lines are removed and the final rectangle is drawn. The options at the bottom of the shapes menu determine if the border is drawn (default), or if the area is filled, or both. When the border is drawn, all attributes as described for line shapes are applicable, except for start/end style. When filled, the configured fill color and pattern is applicable. When both border and filling is requested, line attributes are not applied but instead the border is drawn as a solid line in the fill color. The options at the bottom of the Shapes menu allow specifying rounded corners; this applies both to the filling and drawn border. The general combination mode is applied: For border and opaque fill pattern (i.e. filled black or white) only XOR is useful; for other patterns, the transparent mode can be used to make the background image visible at pixels where the pattern has "gaps" (i.e. not the foregroud/fill color). In "Reverse transparent" combination mode the pattern is first inverted and then gaps in the pattern forground are made transparent. |
+| Line | With the line shape (and all following shapes) drawing is done in two phases: At first, while the mouse button is kept pressed, only a dotted line is drawn between the original and current mouse position. This line only serves to mark where the line will be drawn. Once the mouse button is released, the dotted line is removed and the actual line is drawn using the configured color, width, line pattern and start/end style attributes. The combination mode attribute also is applicable; transparent mode only makes a difference when using line patterns with gaps. |
+| Rectangle | While the mouse button is kept pressed, a dotted rectangle between the original and current mouse positions is drawn (where the two mouse positions define opposite corners of the rectangle). Once the mouse button is released, the dotted lines are removed and the final rectangle is drawn. The options at the bottom of the shapes menu determine if the border is drawn (default), or if the area is filled, or both. When the border is drawn, all attributes as described for line shapes are applicable, except for start/end style. When filled, the configured fill color and pattern is applicable. When both border and filling is requested, line attributes are not applied but instead the border is drawn as a solid line in the fill color. The options at the bottom of the Shapes menu allow specifying rounded corners; this applies both to the filling and drawn border. The general combination mode is applied: For straight border and opaque fill pattern (i.e. filled black or white) only XOR is useful; when patterns with gaps are, the transparent mode can be enables to make the background image visible at pixels where the pattern has "gaps" (i.e. not the foregroud/fill color). In "Reverse transparent" combination mode the pattern is first inverted and then gaps in the pattern forground are made transparent. |
 | Square | This shape is equivalent to rectangle, except that width and height are kept identical. Specifically, the lower value between width and height is used for both dimensions. |
 | Polygon | Allows drawing complex geometric shapes consisting of up to 128 corners. Unlike for other shapes, the mouse button is released during drawing to define the corners: The position of the initial mouse click and the position upon release of the mouse button defines the first line. (Note releasing the mouse button without movement will currently draw a single dot and not allow adding further corners.) Each subsequent mouse click specifies an additional corner. While the mouse is moved, a dotted line is drawn between all previously defined corners, the current mouse position, and back from the mouse position to the origin. During this process the `Backspace` key will remove the last defined corner. Specifying corners is ended by pressing the `Return` key; the position of the mouse at the time of pressing the key defines the last corner. Afterwards the dotted lines are removed and the polygon is drawn using the configured line and fill attributes, equivalently as for rectangles, except that rounded corners are not supported and line start/end style is applied (however only for the line connecting the last two corners). Note intersection of lines defining the polygon is supported even when filling the polygon. |
 | Circle | While the mouse button is kept pressed, a dotted circle is drawn, where the original mouse position defines the center and the current mouse position a point on the circumference of the circle. Once the mouse button is released, the dotted line is removed and the final circle is drawn. Border and fill attributes are applied equivalently as for rectangles. Additionally the circle can be limited to an arc using the `Segment` entry in the shapes menu, which allows specifying starting and end angles in 10th of degrees (i.e. range 0 to 360, counter-clockwise with origin in location of East). It's possible to define an arc spanning across the 0 degree location by specifying an end degree which is smaller than the start degree (e.g. 270,0 to 90,0). Note the line end styles are normally applied at degree 0 for a full circle. To get them drawn at another position on the radius, define an arc spanning from that degree to an end degree that is 0,1 less. |
 | Elipsis | This shape is equivalent to circle, except that vertical and horizontal radius can be different. The original position of the mouse defines the center of the ellipse; the last position of the mouse defines the radii via the absolute of the horizontal and vertical delta to the original mouse position. The same attributes and arc segment configuration as for circles is applicable. |
 | Curve | This shape is not implemented yet. It was intended for drawing Bezier curves (using the respective VDI functionality). Each segment of the curve is defined by 4 points, where two lie on the curve and two others define the angle of the curve through those points. Equivalent to polygon, a curve can be built from multiple segements. In this case adjacent segments share one end point and corresponding angle vector. |
+
+## Attributes
+
+*Combination modes*: This dialog offers a choice between Replace, Transparent,
+XOR, and Reverse Transparent. By default the first is selected, which means
+shapes are opaque and cover the backgound image on top of which you are
+drawing.  In transparent mode, the background image remains visible whereever
+your drawing shape has gaps (i.e. pixels are bit-wise OR of background and
+foreground). Such gaps only occur when using line or fill patterns.  XOR mode
+means pixels are inverted when they are both set in background and forground
+image (e.g. when you draw a shape that is filled solid black, the effect is
+that the background image in that area remains visible in inverse).  With
+reverse transparent mode the drawing shape is inverted and then made
+transparent.
+
+Note the combination mode configuration in the attributes menu only applies to
+the drawing shapes in the Shapes menu. For selections there is a separate
+configuration dialog in the Selections menu which has more combination modes.
+In that menu "Z = Q" is equivalent "Replace"; "Q OR Z" is equivalent
+transparent; "Q XOR Z" equivalent XOR; "Reverse transparent" equivalent
+"Q OR (NOT Z)"
+
+*Fill pattern*: This dialog defines the pattern that is used when enabling the
+"Fill shapes" option for rectangle, square, etc. It also applies for the brush
+and flood-filling. The dialog window shows the currently selected pattern in a
+boy at the upper left. You can cycle through pre-defined patterns using the "+"
+and "-" buttons next to the box. Alternatively, you can edit the style and
+index numbers directly. For applying a user-defined pattern, change the style
+number to 4 and edit the pattern by clicking on pixels in the bog box at the
+right. The demo box at the left will show how the pattern looks like after each
+change.
+
+*Line attributes*: This dialog defines the pattern used for drawing with the
+line shape, or borders of rectangles etc. when not filled. When selecting
+color, 1 means black and 0 white. Line widths should be odd numbers. The
+"style" selection allows selecting pre-defined patterns numbered 1-6, or
+user-defined pattern numbered 7. Click into the demo box at the upper-right to
+see a demo of the line pattern. You can edit the user-defined pattern by
+clicking on pixels in the small box below the demo box. While "style 7" is
+selected on the left, the demo box is updated with the user-defined pattern
+after each change.  Finally, the start and end settings determine the look of
+line ends. Here "normal" means there is no decoration at line ends; for
+"rounded" an extra "dot" is drawn at the end points (i.e. unlike rounded
+rectangles this makes the shape extent larger); with "arrow" and arrow is added
+on top of the ends.  (In XOR mode you can see that these end shapes are drawn
+separately on top of the drawn line, thus XORing with the line itself.)
+
+The other attributes have already been described above together with the shapes
+they apply to.
 
 ## Working with selections
 
@@ -113,3 +162,12 @@ a single such buffer shared by all windows).
 | Show mouse coordinates | When this option is checked, the mouse coordinates are constantly displayed in the right corner of the menu bar. The coordinates are relative to the root of the image in the current window. When the mouse is moved outside of an image window only dashes are shown. |
 | Snap to grid | When this option is checked, the mouse position is rounded to the closest position in the grid for all operations (without actually moving the mouse pointer to this position). This is useful for alinging start and end of multiple drawing operations. It can also be used for creating effects with freestyle tools such as the pencil (e.g. a stair effect when drawing diagonally). |
 | Grid setup | Allows configuring the grid spacing as well as the grid origin. |
+
+## Examples
+
+|     |      |      |      | Description |
+|:----|:-----|:-----|:-----|:------------|
+| ![Brush shape "/"](../images/demo_pinsel1.png) | ![Brush shape "\\"](../images/demo_pinsel2.png) | ![Brush shape "\|"](../images/demo_pinsel3.png) | ![X](../images/demo_pinsel4.png) | Brush shapes "/", "\", "\|" and "-" |
+| ![X](../images/demo_pinsel_pat.png) | ![X](../images/demo_outline.png) | ![X](../images/demo_pencil.png) | ![X](../images/demo_spray.png) | Brush with fill pattern; Outline created with XOR selection overlay; Pencil width 3; Spraycan |
+| ![X](../images/demo_rubber.png) | ![X](../images/demo_lines_xor.png) | ![X](../images/demo_rect_filled.png) | ![X](../images/demo_arc_filled.png) | Rubberband, Lines width 3 with arrow and XOR across rectangle; pattern-filled rounded rectangle; filled arc |
+| ![X](../images/demo_stencil.png) | ![X](../images/demo_poly_fill_geom.png) | ![X](../images/demo_poly_fill_isect.png) | ![X](../images/demo_poly_complex.png) | Stencil shape "star"; Simple filled polygon; Filled intersecting polygon; Complex filled polygon |
