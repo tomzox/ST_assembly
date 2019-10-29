@@ -1,16 +1,16 @@
 # Assembly programs for Atari-ST
 
-These are two assembly programs I wrote for my Atari-ST in MC-68000 assembly
-mainly between 1986-1988. The purpose for writing these was for learning about
-the new platform (especially the "GEMDOS" CP/M clone, about graphical
-user-interface design in general and the rich AES/VDI libraries in particular)
-as well as for my own use.
+I'm sharing a bitmap painting program and a text editor/IDE which I wrote for my
+Atari-ST in MC-68000 assembly mainly between 1986-1988. The original purpose for
+writing these was for learning about the new platform (especially the GEMDOS CP/M
+clone, about graphical user-interface design in general and the rich AES/VDI
+libraries in particular) as well as for my own use.
 
-I don't expect these programs to be of use for anyone these days. I started the
-effort for creating this page mainly for rediscovering myself what I created 30
-years ago, but also for brushing-up my 68k assembly skills. The repository
+I don't expect these programs to be useful for more than satisfying historical interest these days.
+I started the effort for creating this page mainly for rediscovering myself what I created 30
+years ago, but also for brushing-up my assembly skills. The repository
 contains the original sources written in the 80s, but in case of TH-paint the
-latest version is considerably reworked, which was unavoidable for getting to
+latest version is partially reworked, which was unavoidable for getting to
 understand at all what the sparsely commented code was doing. (Please don't
 assume even the latest version reflects my current coding style though. I
 wrote these programs before I ever used a structured programming language.)
@@ -56,27 +56,27 @@ assembly would have been required anyway to get acceptable performance for
 graphics operations (after all the CPU still was clocked only at 8 MHz). I
 reused some of the code written here in later C projects.
 
-For specifications I used the books "ATARI ST GEM" for AES/VDI, "ATARI ST
-Intern" for GEMDOS (BIOS) and below, and "Das Prozessor Buch zum 68000" for the
-68k instruction set and architecture. All of these were released by Data
+For specifications I used the books "ATARI ST GEM" covering AES/VDI, "ATARI ST
+Intern" covering GEMDOS, BIOS and chipset, and "Das Prozessor Buch zum 68000"
+covering 68k instruction set and architecture. All of these were released by Data
 Becker.
 
 The resource files `fa_en.rsc` and `fa_de.rsc` (containing definition of the
 menu and dialog boxes) were originally created using the DRI Resource Editor.
 For current updates I used the freely available tool "Interface" (by Gerd
 Hoeller, version 2.33 released 03.10.1994). Unfortunately the tools do not
-support multiple columns as used in the "Shapes" menu, so I additionally used a
-hex-editor to patch X/Y coordinates of those menu entries.
+support multiple columns of menu entries as used in the "Shapes" menu, so I
+additionally used a hex-editor to patch X/Y coordinates of those menu entries.
 
 The assembly code was originally written for the "GST 68000 Macro Assembler
 A246V040". I still found a mention in a
 [review of ST assemblers](https://www.atarimagazines.com/startv1n1/STAssemblers.html)
 but otherwise the company seems to have disappeared and no documentation is to
 be found anywhere on the Internet. Fortunately the assembly syntax seems to be
-the official Motorola syntax and thus supported by many other assemblers (e.g.
-[vasm](http://sun.hasenbraten.de/vasm/) parses it just fine).  However the
-macros used for system calls are not portable. I added a little Perl script
-`asm_macro.pl` that generates codes for these specific macros.
+the official Motorola syntax and thus supported by many other assemblers such as
+[vasm](http://sun.hasenbraten.de/vasm/). Only the macros used for AES and VDI
+system calls are not portable. Therefore I added a little Perl script `asm_macro.pl`
+that generates assembly code for these specific macros.
 
 ## Building the programs
 
