@@ -33,26 +33,31 @@
  XREF  aescall,vdicall,stack
  XREF  bildbuff,wi1,wi_count,rec_adr,menu_adr,win_xy
  XREF  last_koo,rsrc_gad,save_scr,set_xx,win_rdw,form_wrt
- XREF  fram_del,form_do,form_del,form_buf
+ XREF  form_do,form_del,form_buf
  XREF  frinfobo,frkoordi,frdrucke,frdatei,koanztab,choofig
- XREF  init_ted,copy_blk,maus_neu,fram_ins,maus_bne
+ XREF  init_ted,copy_blk,maus_neu,maus_bne,fram_ins,fram_del
  ;
  XDEF  evt_menu_desk,evt_menu_file
  XDEF  get_koos,over_que
  XDEF  alertbox,wind_chg,init_itemslct
 
-**********************************************************************
+*-----------------------------------------------------------------------------
+* This module handles menu commands in the Desk and File menus. The respective
+* handlers are called out of the main event loop when notified by AES that a
+* menu entry in one of the menus was selected by the user.
+*
+*-----------------------------------------------------------------------------
 *   Global register mapping:
 *
 *   a4   Address of address of current window record
 *   a6   Base address of data section
-**********************************************************************
+*-----------------------------------------------------------------------------
 
-*---------------------------------------------------------------------
+*-----------------------------------------------------------------------------
 *               D E S K   M E N U
-*---------------------------------------------------------------------
+*-----------------------------------------------------------------------------
 evt_menu_desk:
-          cmp.b     #MEN_IT_ABOUT,d0
+          cmp.w     #MEN_IT_ABOUT,d0
           bne.s     evt_menu_rts
           moveq.l   #1,d2
           lea       frinfobo,a2
@@ -61,12 +66,30 @@ evt_menu_desk:
 evt_menu_rts:
           rts
 
-*---------------------------------------------------------------------
+*-----------------------------------------------------------------------------
 *               F I L E   M E N U
-*---------------------------------------------------------------------
+*-----------------------------------------------------------------------------
 evt_menu_file:
-          cmp.b     #MEN_IT_QUIT,d0
-          bne       new
+          cmp.w     #MEN_IT_UNDO,d0
+          beq       evt_menu_file_undo
+          cmp.w     #MEN_IT_DISC,d0
+          beq       evt_menu_file_discard
+          cmp.w     #MEN_IT_NEW,d0
+          beq       evt_menu_file_new
+          cmp.w     #MEN_IT_LOAD,d0
+          beq       evt_menu_file_load
+          cmp.w     #MEN_IT_SAV_AS,d0
+          beq       evt_menu_file_save
+          cmp.w     #MEN_IT_SAVE,d0
+          beq       evt_menu_file_save
+          cmp.w     #MEN_IT_PRINT,d0
+          beq       evt_menu_file_print
+          cmp.w     #MEN_IT_QUIT,d0
+          beq       evt_menu_file_quit
+          rts
+
+*-----------------------------------------------------------------------------
+evt_menu_file_quit:
           bsr       wind_chg            --- Command: Quit ---
           bne.s     quitapp3
           moveq.l   #WIN_STRUCT_CNT-1,d0
@@ -89,11 +112,12 @@ quitapp1  ;
           aes       111 0 1 0 0         ;rsrc_free
           vdi       101 0 0             ;close_vwork
           aes       19 0 1 0 0          ;appl_exit
-          clr.l     -(sp)               ;term
+          clr.l     -(sp)               ;Pterm0
           trap      #1
+          rts                           ;never reached
           ;
-new       cmp.b     #MEN_IT_DISC,d0
-          bne       zwei_17
+*-----------------------------------------------------------------------------
+evt_menu_file_discard:
           bsr       wind_chg            --- Command: Discard ---
           beq.s     new1
           moveq.l   #1,d0
@@ -126,11 +150,11 @@ new2      clr.l     (a0)+               clear window buffer
           bsr       name_xx
           bra       win_rdw
           ;
-zwei_17   cmp.b     #MEN_IT_NEW,d0
-          bne       zwei_18
+*-----------------------------------------------------------------------------
+evt_menu_file_new:
           bsr       over_que            --- Command: New ---
           bne       evt_menu_rts
-open      bsr       save_scr            +++ open a new window +++
+open_ld   bsr       save_scr            +++ open a new window +++
           bsr       fram_del
           move.w    wi_count,d0
           cmp.w     #6,d0
@@ -139,7 +163,7 @@ open      bsr       save_scr            +++ open a new window +++
           lea       stralwi7,a0
           bsr       alertbox
           cmp.w     #1,d0
-          bne.s     open_rts
+          bne.s     open13
 open11    move.l    #-1,-(sp)           ;malloc
           move.w    #$48,-(sp)
           trap      #1
@@ -150,7 +174,7 @@ open11    move.l    #-1,-(sp)           ;malloc
           moveq.l   #1,d0
           bsr       alertbox
           moveq.l   #-1,d0
-          rts
+open13    rts
 open9     ;
           aes       100 5 1 0 0 $fef 0 18 640 382  ;wind_create
           move.w    INTOUT+0(a6),d1
@@ -159,7 +183,7 @@ open2     moveq.l   #1,d0
           lea       stralnow,a0         error creating window -> abort
           bsr       alertbox
           moveq.l   #-1,d0
-open_rts  rts
+          rts
 open1     moveq.l   #WIN_STRUCT_CNT-1,d0   search for free window record...
           move.l    a4,a0
           lea       wi1,a4
@@ -239,8 +263,8 @@ open7     moveq.l   #8,d0               slider: position 0
           clr.b     d0
           rts
           ;
-zwei_18   cmp.b     #MEN_IT_LOAD,d0
-          bne       zwei_14
+*-----------------------------------------------------------------------------
+evt_menu_file_load:
           bsr       over_que            --- Command: Load ---
           bne       evt_menu_rts
           lea       filename,a0
@@ -377,21 +401,17 @@ load_opn  bsr       wind_chg            ++ prepare window ++
           bne.s     load_op2
           tst.w     SEL_STATE(a6)       selection ongoing?
           beq       set_name            no -> use already open window
-load_op2  bsr       open
+load_op2  bsr       open_ld
           tst.b     d0                  error?
           beq       set_name
           addq.l    #4,sp
           moveq.l   #-1,d3
           bra       load9
           ;
-tos_err   neg.w     d0                  ++ report error ++
-          aes       53 1 1 0 0 !d0
-          rts
-          ;
-zwei_14   cmp.b     #MEN_IT_UNDO,d0
-          bne       zwei_1b
+*-----------------------------------------------------------------------------
+evt_menu_file_undo:
           tst.b     UNDO_STATE(a6)      --- Command: Undo ---
-          beq       open_rts
+          beq       evt_menu_rts
           btst.b    #1,INFO(a4)         single modification only so far?
           bne.s     regen8
           bchg.b    #3,INFO(a4)         yes -> reset modification flag
@@ -505,8 +525,8 @@ regen5    move.l    d2,d0
           dbra      d0,regen5
 regen2    bra       win_rdw
           ;
-zwei_1b   cmp.b     #MEN_IT_PRINT,d0
-          bne       zwei_19
+*-----------------------------------------------------------------------------
+evt_menu_file_print:
           move.w    WIN_HNDL(a4),d0    --- Command: Print ---
           bmi       evt_menu_rts
           moveq.l   #1,d0
@@ -711,11 +731,9 @@ druck33   moveq.l   #13,d0
           moveq.l   #10,d0
           bra       chrout
           ;
-zwei_19   cmp.b     #MEN_IT_SAV_AS,d0
-          beq.s     save18
-          cmp.b     #MEN_IT_SAVE,d0
-          bne       evt_menu_rts
-save18    move.b    frdatei+33,d0       --- Command: Save/Save as ---
+*-----------------------------------------------------------------------------
+evt_menu_file_save:
+          move.b    frdatei+33,d0       --- Command: Save/Save as ---
           bne       save3
           move.b    frdatei+35,d0       +++ Format RAW +++
           bne.s     save4
@@ -929,7 +947,9 @@ save_dat  move.l    a0,-(sp)            +++ Save image data +++
           add.w     #12,sp
           rts
           ;
-*---------------------------------------------------------SUBFUNCTIONS
+*-----------------------------------------------------------------------------
+*               S U B - F U N C T I O N S
+*-----------------------------------------------------------------------------
 prtout    clr.w     d0                  ** Send string to printer **
           move.b    (a2)+,d0
           beq.s     prtout1             zero-terminated -> done
@@ -938,16 +958,23 @@ prtout    clr.w     d0                  ** Send string to printer **
           bne       prtout
 prtout1   rts
           ;
+*-----------------------------------------------------------------------------
 chrout    move.w    d0,-(sp)            ** print one byte **
           move.w    #5,-(sp)
           trap      #1
           addq.l    #4,sp
           rts
           ;
+*-----------------------------------------------------------------------------
+tos_err   neg.w     d0                  ** report error **
+          aes       53 1 1 0 0 !d0
+          rts
+          ;
+*-----------------------------------------------------------------------------
 koo_chk   move.w    choofig,d0          Enable/disable "Coordinates"
-          cmp.b     #MEN_IT_CHK_COOR,d0 ;selected shape == coordinates?
+          cmp.w     #MEN_IT_CHK_COOR,d0 ;selected shape == coordinates?
           beq.s     koo_chk2
-          cmp.b     #MEN_IT_CHK_SEL,d0  selection?
+          cmp.w     #MEN_IT_CHK_SEL,d0  selection?
           beq.s     koo_chk3
           lea       koanztab,a1
           sub.w     #MEN_IT_PENCIL,d0
@@ -958,6 +985,7 @@ koo_chk2  moveq.l   #MEN_IT_COORDS,d0   disable "coordinates"
 koo_chk3  moveq.l   #MEN_IT_COORDS,d0   enable "coordinates"
           bra       men_iena
           ;
+*-----------------------------------------------------------------------------
 wind_chg  btst.b    #1,INFO(a4)         ** Image modified? **
           bne.s     wind_ch1
           tst.w     UNDO_STATE(a6)
@@ -966,6 +994,7 @@ wind_chg  btst.b    #1,INFO(a4)         ** Image modified? **
           bchg.b    #3,INFO(a4)
 wind_ch1  rts
           ;
+*-----------------------------------------------------------------------------
 over_que  tst.w     SEL_STATE(a6)       ** Ask for confirmation "Commit selection?" **
           beq.s     over_qrts
           tst.b     SEL_OPT_OVERLAY(a6)
@@ -978,6 +1007,7 @@ over_que  tst.w     SEL_STATE(a6)       ** Ask for confirmation "Commit selectio
           cmp.w     #1,d0
 over_qrts rts
           ;
+*-----------------------------------------------------------------------------
 alertbox  ;
           aes       52 1 1 1 0 !d0 !a0  ** Execute AES-alert dialog **
           move.w    INTOUT+0(a6),-(sp)
@@ -987,6 +1017,7 @@ alertbox  ;
           move.w    d0,(a0)             Exit-Taste nach D0
           rts
           ;
+*-----------------------------------------------------------------------------
 init_itemslct:
           lea       directory,a2        ** Initialitze Items-Selector **
           move.w    #$19,-(sp)
@@ -1008,6 +1039,7 @@ getdir2   move.b    (a0)+,(a2)+
           bne       getdir2
           rts
           ;
+*-----------------------------------------------------------------------------
 itemslct  lea       directory,a2        ** Item-Selector **
           lea       filename,a0
           aes       90 0 2 2 0 !a2 !a0
@@ -1075,6 +1107,7 @@ items5    move.b    (a0)+,(a1)+
 itemsok   clr.b     d0                  D0 = 0 -> ok
           rts
           ;
+*-----------------------------------------------------------------------------
 set_name  move.l    BILD_ADR(a4),a0     ** Set window title **
           add.w     #32010,a0
           lea       directory,a1
@@ -1099,9 +1132,10 @@ set_nam3  move.b    (a1)+,(a0)+         file name
           bsr       men_iena
           move.l    a2,a0
 name_xx   move.l    a0,INTIN+4(a6)
-          aes       105 4 1 0 0 !(a4) 2  ;wind_set: window title
+          aes       105 4 1 0 0 !WIN_HNDL(a4) 2  ;wind_set: window title
           rts
           ;
+*-----------------------------------------------------------------------------
 get_koos  lea       frkoordi,a2         ** Ask for Coordinates **
           moveq.l   #RSC_FORM_COORD,d1
           bsr       rsrc_gad
@@ -1136,7 +1170,7 @@ get_koo3  move.w    6(a2),(a1)
 get_koo4  move.w    34(a2),4(a1)
           move.w    48(a2),6(a1)
           rts
-*--------------------------------------------------------------STRINGS
+*--------------------------------------------------------------STRINGS--------
 stralneu  dc.b   '[1][Please confirm discarding|'
           dc.b   'your work!'
           dc.b   '][Ok|Cancel]',0
@@ -1171,18 +1205,18 @@ stralovq  dc.b   '[1][You are about to commit the|'
           dc.b   'selection and overwrite the|'
           dc.b   'background'
           dc.b   '][Ok|Cancel]',0
-*------------------------------------------------------------------I/O
+*------------------------------------------------------------------I/O--------
 picname   dc.b    '\*.PIC',0
 directory ds.w   35
 filename  dcb.w  7,0
 dta       ds.w   25             ; GEMDOS-internal buffer for directory searches (struct DTA, size 22*2 bytes)
 logo_buf  ds.w   5
 handle    ds.w   1              ; temporary used during load & store
-*----------------------------------------------------------------PRINT
+*----------------------------------------------------------------PRINT--------
 escfeed   dc.b   27,65,8,0
 eschigh   dc.w   $1b4c,0000,0
 drucktab  dc.b   $ff,$7f,$3f,$1f,$0f,$07,$03,$01
           dc.b   $80,$c0,$e0,$f0,$f8,$fc,$fe,$ff
-*---------------------------------------------------------------------
+*-----------------------------------------------------------------------------
           align 2
-          end
+          END

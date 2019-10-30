@@ -33,21 +33,31 @@
  XREF  frmodus,frmuster,frtext,frlinie,frraster,frzeiche
  XREF  chookoo,choofig,chooset,chooras,chootxt,choopat,chooseg
  XREF  rec_adr,logbase,bildbuff
- XREF  copy_blk,save_scr,fram_del,form_do,form_del
+ XREF  copy_blk,save_scr,form_do,form_del
  XREF  hide_m,show_m,work_bl2,alertbox,pinsel,spdose,gummi
  XREF  punkt,kurve,radier,over_old,over_que,over_beg,mfdb_q,stack
  ;
- XDEF  evt_butt
- XDEF  win_xy,fram_drw,save_buf,win_abs,noch_qu,return,set_wrmo
+ XDEF  evt_butt,last_koo,koanztab
+ XDEF  win_xy,save_buf,win_abs,noch_qu,return,set_wrmo
  XDEF  koos_mak,clip_on,new_1koo,new_2koo,set_att2,ret_att2
- XDEF  ret_attr,set_attr,fram_ins,last_koo,koanztab
+ XDEF  ret_attr,set_attr,fram_ins,fram_drw,fram_del,fram_mod
 
-**********************************************************************
+*-----------------------------------------------------------------------------
+* This module (together with "fh.asm") contains handlers for drawing
+* operations, which all start with a mouse click into an image window. The
+* first function below is called by the main event loop upon a mouse click.
+* The function brnches to the handler for the currently selected drawing shape
+* (including the selection frame). The handler functions do not return before
+* the mouse button is released again; mouse movement and button release is
+* polled (busy loop) and processed within the handlers. Afterward there is a
+* common exit handling for updating the undo and image buffers.
+*
+*-----------------------------------------------------------------------------
 *   Global register mapping:
 *
 *   a4   Address of address of current window record
 *   a6   Base address of data section
-**********************************************************************
+*-----------------------------------------------------------------------------
           ;
 evt_butt  lea       win_xy,a0           WIN_XY: window coords.
           move.l    YX_OFF(a4),8(a0)
@@ -72,33 +82,35 @@ evt_butt  lea       win_xy,a0           WIN_XY: window coords.
           beq       schub               -> move selection
           bsr       fram_drw
           bra.s     evt_but4
-evt_but5  move.l    UNDO_BUF_ADDR(a6),d0      ++ regular tool ++
+          ;
+evt_but5  move.l    UNDO_BUF_ADDR(a6),d0    ++ regular tool ++
           cmp.l     BILD_ADR(a4),d0
           bne.s     evt_but4
           tst.w     SEL_FLAG_PASTABLE(a6)   ;disable "paste" flag
           beq.s     evt_but4
           clr.w     SEL_FLAG_PASTABLE(a6)
-          moveq.l   #MEN_IT_SEL_PAST,d0 ;disable "paste (selection)" menu entry
+          moveq.l   #MEN_IT_SEL_PAST,d0     ;disable "paste (selection)" menu entry
           bsr       men_idis
 evt_but4  bsr       save_scr
           move.w    #$ff00,UNDO_STATE(a6)
           lea       last_koo,a0
           clr.w     8(a0)
-          move.l    MOUSE_ORIG_XY(a6),d3      D3: mouse X/Y-pos.
-*- - - - - - - - - - - - - - - - - - - - - - - - - - -GRAPHICS-HANDLER
+          move.l    MOUSE_ORIG_XY(a6),d3    D3: mouse X/Y-pos.
+*- - - - - - - - - - - - - - - - - - - - - - - - - - -GRAPHICS-HANDLER - - - -
           move.w    choofig,d0
-          cmp.b     #MEN_IT_CHK_COOR,d0
+          cmp.w     #MEN_IT_CHK_COOR,d0
           beq       pospe               save position
-          cmp.b     #MEN_IT_CHK_SEL,d0
+          cmp.w     #MEN_IT_CHK_SEL,d0
           bne.s     evt_but6
           moveq.l   #MEN_IT_RECT,d0     mark selection
 evt_but6  sub.w     #MEN_IT_PENCIL,d0
+          blo       exit7
           lsl.w     #1,d0
           lea       tool_func_table,a0
           move.w    (a0,d0.w),d0
           jsr       (a0,d0.w)
           ;
-*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 exit_beg  lea       last_koo,a1         + convert coordinates to absolute +
           move.w    8(a1),d2
           beq.s     exit1
@@ -142,7 +154,7 @@ exit7     tst.b     MOUSE_LBUT+1(a6)    wait for mouse button to be released
 donot     move.w    #-1,MOUSE_LBUT+2(a6)   mouse click unhandled
           rts
           ;
-*---------------------------------------------------GRAPHICS-FUNCTIONS
+*-----------------------------------------------------------------------------
 pospe     clr.w     UNDO_STATE(a6)      *** Save position ***
           move.l    rec_adr,a0
           add.w     YX_OFF(a0),d3
@@ -150,8 +162,9 @@ pospe     clr.w     UNDO_STATE(a6)      *** Save position ***
           lea       last_koo,a0
           move.l    4(a0),(a0)+
           move.l    d3,(a0)
-          bra       exit7
+          bra       exit7               ;NOTE this is not a sub-function so no rts
           ;
+*-----------------------------------------------------------------------------
 linie     dc.w      $a000               *** Shape: Line ***
           move.l    a0,a3
           move.l    d3,38(a3)           D3: starting X/Y coord.
@@ -192,6 +205,7 @@ linie4    bsr       set_att2            --- finalize line ---
           vdi       6 2 0               ;polyline
           bra       ret_attr
           ;
+*-----------------------------------------------------------------------------
 vieleck   clr.w     MOUSE_LBUT(a6)      *** Shape: Polygon ***
           move.l    bildbuff,a2
           move.l    38(a3),(a2)+
@@ -361,6 +375,7 @@ fuellen   bsr       new_1koo            *** Shape: Bucket fill ***
           vdi       23 0 1 1
           bra       return
           ;
+*-----------------------------------------------------------------------------
 quadrat   dc.w      $a000               *** Tools: Square, Rectangle ***
           move.l    a0,a3
           move.w    #-1,32(a3)          dummy
@@ -461,6 +476,7 @@ quadr_dr  move.w    #2,36(a3)           ++ Draw rubberband-rectangle ++
           dc.w      $a003               x2y1-x2y2
           rts
           ;
+*-----------------------------------------------------------------------------
 markier   move.b    SEL_OPT_OVERLAY(a6),d0   *** Start new selection ***
           beq.s     markier6
           tst.w     SEL_STATE(a6)       previous selection frame still active=
@@ -526,6 +542,7 @@ markier3  move.l    d2,d0
           clr.b     SEL_FLAG_CUTOFF(a6) no cut-off
           rts
           ;
+*-----------------------------------------------------------------------------
 kreis     bsr       clip_on             *** Shape: Circle/Arc & Ellipsis ***
           vdi       32 0 1 3            XOR
           vdi       15 0 1 7            self-defined line type
@@ -619,6 +636,7 @@ kreis_el  move.w    #6,CONTRL+10(a6)
           vdi       11 2 2 !d4 !d5 !d6 !d7  ;elliptical_arc
           rts
           ;
+*-----------------------------------------------------------------------------
 text      bsr       new_1koo            *** Shape: Text ***
           move.l    rec_adr,a0
           bsr       save_buf
@@ -827,7 +845,7 @@ text_at1  move.w    d0,6(a2)            line height
           bsr       set_wrmo
           bra       clip_on
           ;
-***************************************************************************
+*-----------------------------------------------------------------------------
 *  stack frame:
 *        0: prev. mouse coords. (i.e. at time of starting to drag mouse)
 *        4: cur selection frame coords.
@@ -837,7 +855,7 @@ text_at1  move.w    d0,6(a2)            line height
 *       20: selection image source
 *       24: source coord. X1Y1
 *       28: source coord. X2Y2
-***************************************************************************
+*-----------------------------------------------------------------------------
 schub     move.b    SEL_CUR_COMB(a6),d7  ;*** Move selection ***
           bsr       over_old
           move.b    d7,SEL_CUR_COMB(a6)
@@ -1008,8 +1026,13 @@ schub21   ;                             + set flags +
           beq       exit3
           moveq.l   #MEN_IT_SEL_COMI,d0 ;enable "commit (selection)"
           bsr       men_iena
-          bra       exit3
-*----------------------------------------------------GEM-SUBFUNCTIONS
+          bra       exit3               ;NOTE this is not a sub-function so no rts
+
+*-----------------------------------------------------------------------------
+*               S U B - F U N C T I O N S
+*-----------------------------------------------------------------------------
+
+*----------------------------------------------------GEM-SUBFUNCTIONS---------
           ;
 set_attr  move.w    frmuster+6,d0       ** set attributes **
           vdi       23 0 1 !d0           ;fill pattern type (0..4)
@@ -1045,7 +1068,7 @@ return    ;
           vdi       129 0 1 0           ;delete clipping rect.
           vdi       32 0 1 3            ;set_writing_mode XOR
           rts
-*--------------------------------------------------------SUBFUNCTIONS
+*--------------------------------------------------------SUBFUNCTIONS---------
 noch_qu   lea       win_xy,a0           ** Query mouse **
 noch_qu5  tst.b     MOUSE_LBUT+1(a6)    --- start loop ---
           beq.s     noch_rts
@@ -1078,6 +1101,7 @@ noch_qu4  cmp.l     d0,d3               loop until effective mouse position chan
           movem.l   (sp)+,a1/d1-d2
 noch_rts  rts
           ;
+*-----------------------------------------------------------------------------
 noch_in   cmp.w     (a0),d0             ** Pos. within selection area? **
           blo.s     noch_in1
           cmp.w     4(a0),d0
@@ -1091,6 +1115,7 @@ noch_in   cmp.w     (a0),d0             ** Pos. within selection area? **
 noch_in1  moveq.l   #1,d2
           rts
           ;
+*-----------------------------------------------------------------------------
 win_abs   move.l    rec_adr,a0          ** Limit window size **
           move.l    FENSTER(a0),d0
           move.l    FENSTER+4(a0),d1
@@ -1107,6 +1132,7 @@ win_abs1  cmp.w     #640,4(a0)
           move.w    #639,4(a0)
 win_abs2  rts
           ;
+*-----------------------------------------------------------------------------
 lim_win   lea       win_xy,a0           ** Limit to window **
           cmp.w     2(a0),d0
           bge.s     lim_win1
@@ -1126,6 +1152,7 @@ lim_win4  swap      d0
           swap      d1
           rts
           ;
+*-----------------------------------------------------------------------------
 new_1koo  lea       last_koo,a0         ** Store mouse coord. **
           move.l    4(a0),(a0)
           move.l    d3,4(a0)
@@ -1139,6 +1166,7 @@ new_2koo  lea       last_koo,a0
           move.w    #-1,8(a0)
 new_3koo  rts
           ;
+*-----------------------------------------------------------------------------
 save_buf  move.l    rec_adr,a1          ** Copy image to undo buffer **
           move.l    BILD_ADR(a1),a1
           move.l    bildbuff,a2
@@ -1150,6 +1178,7 @@ save_bu1  move.l    (a1)+,(a2)+
           dbra      d0,save_bu1
           rts
           ;
+*-----------------------------------------------------------------------------
 fram_ins  lea       stack+4,a3          ** Copy selection content into image **
           move.l    (a3),d0
           move.l    d0,d1
@@ -1197,6 +1226,7 @@ fram_in1  clr.w     d3                  use combination mode
           vdi       109 4 1             ;copy_raster
           rts
           ;
+*-----------------------------------------------------------------------------
 fram_drw  tst.w     SEL_STATE(a6)       ** frame the selection **
           beq       tool_rts
           move.l    rec_adr,a1
@@ -1297,6 +1327,47 @@ fram_dr8  move.w    d6,38(a3)
           dc.w      $a003               X2Y1-X2Y2
 fram_dr9  bra       show_m
           ;
+*-----------------------------------------------------------------------------
+fram_del  tst.w     SEL_STATE(a6)       ** Stop selection **
+          beq       exec_rts
+          move.l    menu_adr,a0
+          bclr.b    #3,MEN_IT_SEL_PAST*RSC_OBJ_SZ+11(a0) ;enable "paste"
+          add.w     #MEN_IT_SEL_PAST*RSC_OBJ_SZ+11,a0
+          moveq.l   #10,d0
+fram_de1  bset.b    #3,(a0)             disable menu entries
+          add.w     #RSC_OBJ_SZ,a0
+          dbra      d0,fram_de1
+          move.l    rec_adr,a0          store old frame coord.
+          move.l    SEL_FRM_X1Y1(a6),UNDO_SEL_X1Y1(a6)
+          move.l    SEL_FRM_X2Y2(a6),UNDO_SEL_X2Y2(a6)
+          move.l    BILD_ADR(a0),UNDO_BUF_ADDR(a6)
+          move.w    #$ff00,SEL_FLAG_PASTABLE(a6)   ;set flag "old frame exists"
+          tst.b     SEL_STATE(a6)       is frame drawn?
+          beq.s     fram_de3
+          movem.l   a1-a4/d2-d7,-(sp)
+          bsr       get_top             toplevel window up-to-date?
+          bne.s     fram_de2
+          bsr       fram_drw            yes -> delete frame
+          movem.l   (sp)+,a1-a4/d2-d7
+fram_de3  clr.w     SEL_STATE(a6)
+          move.l    #-1,SEL_FRM_X2Y2(a6)  ;(for "undo")
+          rts
+fram_de2  clr.w     SEL_STATE(a6)       no
+          move.l    #-1,SEL_FRM_X2Y2(a6)
+          move.w    EV_MSG_BUF+6(a6),-(sp)
+          bsr       win_rdw             -> redraw image
+          move.w    (sp)+,EV_MSG_BUF+6(a6)
+          movem.l   (sp)+,a1-a4/d2-d7
+          rts
+          ;
+*-----------------------------------------------------------------------------
+fram_mod  ;                             ** Selection content modified **
+          move.l    SEL_FRM_X1Y1(a6),UNDO_SEL_X1Y1(a6)
+          move.l    SEL_FRM_X2Y2(a6),UNDO_SEL_X2Y2(a6)
+          move.l    BILD_ADR(a0),UNDO_BUF_ADDR(a6)
+          rts
+          ;
+*-----------------------------------------------------------------------------
 koos_mak  move.w    chookoo,d0          ** Display mouse position **
           beq       tool_rts
           move.l    rec_adr,a1          window open?
@@ -1359,6 +1430,7 @@ koos_ou2  lea       chookoo+2,a0        ++ address is not within window ++
           addq.l    #6,sp
           rts
           ;
+*-----------------------------------------------------------------------------
 alrast    ;                             ** align XY-coords. with raster **
           move.w    chooras,-2(sp)      FIXME no register free: copy to stack to get "Z" status flag
           beq       tool_rts
@@ -1396,13 +1468,13 @@ alrast1   swap      d0                  Y-coord.
 alrast2   movem.l   (sp)+,d2-d4
 tool_rts  rts
           ;
-*-----------------------------------------------------------------DATA
+*-----------------------------------------------------------------DATA--------
           ;                   ; Clipping rectangle
 win_xy    ds.w   2            ; Window X1/Y1 rel. to screen root 0/0
           ds.w   2            ; Window X2/Y2 (i.e. lower-right corner)
           ds.w   2            ; Y/X(!) offsets window X1/Y1 to image root 0/0 (negative!)
           ds.w   1            ; always zero (for allowing to read X off. via long?)
-*---------------------------------------------------------------------
+*-----------------------------------------------------------------------------
 tool_func_table:
           dc.w     punkt-tool_func_table
           dc.w     pinsel-tool_func_table
@@ -1423,16 +1495,16 @@ tool_func_table:
           ;                             table is indexed by SHAPE menu entry index (-MEN_IT_PENCIL)
 koanztab  dc.b     1,0,0,1,1,1,0,3,3,3,1,3,3,3
           ;
-*---------------------------------------------------------------------
+*-----------------------------------------------------------------------------
 data_buf  ds.w   4                      ; scratch buffer for drawing text
 koostr    dc.b   27,'Y h###/###',0
 koostr1   dc.b   27,'Y h       ',0
 koostr2   dc.b   27,'Y h---/---',0
 koo_buff  ds.w   4
 last_koo  ds.w   5   ; x0,y0; x1,y1; flag 0/-1
-*---------------------------------------------------------------------
+*-----------------------------------------------------------------------------
 stralvie  dc.b   '[3][Polygon completed?][Ok|Continue]',0
 stralmax  dc.b   '[3][Maximum is 128 corners!][Abort]',0
-*---------------------------------------------------------------------
+*-----------------------------------------------------------------------------
           align 2
           END

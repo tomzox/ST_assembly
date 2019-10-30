@@ -36,13 +36,17 @@
  XREF  set_attr,set_att2,ret_attr,ret_att2,chooset,sinus
  ;
  XDEF  punkt,pinsel,spdose,radier,gummi,kurve
-          ;
-**********************************************************************
+
+*-----------------------------------------------------------------------------
+* This module (together with "fg.asm") contains handlers for drawing
+* operations, which all start with a mouse click into an image window.
+* See "fg.asm for details.
+*-----------------------------------------------------------------------------
 *   Global register mapping:
 *
 *  [a4   Address of address of current window record] - unused
 *   a6   Base address of data section
-**********************************************************************
+*-----------------------------------------------------------------------------
           ;
 punkt     clr.w     d1                  *** Shape: Pencil ***
           move.b    frpunkt+33,d1
@@ -99,6 +103,7 @@ punkt3    bsr       hide_m              -- Loop while mouse button pressed --
           bsr       hide_m
           bra       return
           ;
+*-----------------------------------------------------------------------------
 pinsel    move.b    frpinsel+33,d0      *** Shape: Brush ***
           cmp.b     #4,d0
           beq       pinsel7
@@ -170,6 +175,7 @@ pinsel9   move.l    PTSIN+0(a6),d0
           bsr       hide_m
           bra       return
           ;
+*-----------------------------------------------------------------------------
 spdose    bsr       hide_m              *** Shape: Spraycan ***
           moveq.l   #1,d6
           moveq.l   #1,d7
@@ -270,6 +276,7 @@ spdosex   bclr.b    d4,(a0)             op-code table for different spray modes
           bchg.b    d4,(a0)
           bchg.b    d4,(a0)
           ;
+*-----------------------------------------------------------------------------
 gummi     bsr       set_att2            *** Shape: Rubberband ***
           move.l    d3,d7
           clr.w     d0
@@ -287,6 +294,7 @@ gummi1    bsr       show_m
           vdi       6 2 0               ;polyline
           bra       gummi1
           ;
+*-----------------------------------------------------------------------------
 radier    move.b    frradier+33,d0      *** Shape: Eraser ***
           bne.s     radier3
           bsr       clip_on             -- normal mode --
@@ -332,11 +340,11 @@ radier1   bsr       hide_m              ++ loop ++
           ;
 kurve     bra       hide_m              *** Curve ***
           ;
-*=================================================================DATA
+*-----------------------------------------------------------------DATA--------
 pin_data  dc.w  0,1     ; shape "|"
           dc.w  1,0     ; shape "-"
           dc.w  1,-1    ; shape "/"
           dc.w  1,1     ; shape "\"  (note shape "O" handled separately)
 spr_dich  dc.w  60,76,85,90,95,96,97,98,99,103,108,111,115,120,124,128
-*---------------------------------------------------------------------
-          end
+*-----------------------------------------------------------------------------
+          END

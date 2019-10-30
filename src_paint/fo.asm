@@ -37,27 +37,43 @@
  XREF  form_do,frrotier,frzoomen,frzerren
  XREF  work_bl2,rand_tab,form_del
  ;
- XDEF  fuenf_4b,sinus,stack
+ XDEF  evt_menu_sel_pt2,sinus,stack
  ;
-**********************************************************************
+*-----------------------------------------------------------------------------
 *   Global register mapping:
 *
 *   a4   Multi-purpose (initially: Address of address of current window record)
 *   a6   Base address of data section
-**********************************************************************
+*-----------------------------------------------------------------------------
 
-*-------------------------------------------------MENU-HANDLER(cntd.)
-fuenf_4b  cmp.b     #MEN_IT_SEL_MIRR,d0
-          bne       fuenf_4c
+*-----------------------------------------------------------------------------
+*               S E L E C T I O N   M E N U   (c n t d.)
+*-----------------------------------------------------------------------------
+evt_menu_sel_pt2:
+          cmp.w     #MEN_IT_SEL_MIRR,d0
+          beq       evt_menu_sel_mirror
+          cmp.w     #MEN_IT_SEL_ROT,d0
+          beq       evt_menu_sel_rotate
+          cmp.w     #MEN_IT_SEL_ZOOM,d0
+          beq       evt_menu_sel_zoom
+          cmp.w     #MEN_IT_SEL_DIST,d0
+          beq       evt_menu_sel_distort
+          cmp.w     #MEN_IT_SEL_PROJ,d0
+          beq       evt_menu_sel_project
+evt_menu_rts3:
+          rts
+
+*-----------------------------------------------------------------------------
+evt_menu_sel_mirror:
           tst.w     SEL_STATE(a6)       --- Mirror selection ---
-          beq       evt_menu_rts2
+          beq       evt_menu_rts3
           bsr       over_cut
           lea       stralspi,a0
           moveq.l   #2,d0
           bsr       alertbox
           move.w    d0,d4
           cmp.b     #2,d4
-          beq       evt_menu_rts2
+          beq       evt_menu_rts3
           bsr       over_old
           bsr       save_scr
           bsr       save_buf
@@ -65,7 +81,7 @@ fuenf_4b  cmp.b     #MEN_IT_SEL_MIRR,d0
           bne       spiver
           move.w    SEL_FRM_X2Y2+2(a6),d7    -- mirror at horizontal line --
           sub.w     SEL_FRM_X1Y1+2(a6),d7
-          beq       evt_menu_rts2
+          beq       evt_menu_rts3
           move.l    bildbuff,a0
           move.l    BILD_ADR(a4),a1
           move.w    SEL_FRM_X1Y1+2(a6),d0
@@ -128,7 +144,7 @@ spihor5   cmp.w     #-1,d4              is width two words?
           ;
 spiver    move.w    SEL_FRM_X2Y2+0(a6),d1    -- mirror at vertical line --
           cmp.w     SEL_FRM_X1Y1+0(a6),d1
-          bls       evt_menu_rts2
+          bls       evt_menu_rts3
           move.w    SEL_FRM_X2Y2+2(a6),d7    height
           move.w    SEL_FRM_X1Y1+2(a6),d0
           sub.w     d0,d7
@@ -253,8 +269,8 @@ spiver3   cmp.w     #-1,d4
           beq       spiver6
           bra       spiver8
           ;
-fuenf_4c  cmp.b     #MEN_IT_SEL_ROT,d0
-          bne       fuenf_4d
+*-----------------------------------------------------------------------------
+evt_menu_sel_rotate:
           tst.w     SEL_STATE(a6)       --- Rotate ---
           beq       evt_menu_rts3
           bsr       over_cut
@@ -287,8 +303,8 @@ fuenf_4c  cmp.b     #MEN_IT_SEL_ROT,d0
           move.b    #-1,SEL_FLAG_DEL(a6)          clear old rect. before operation
           bra       win_rdw
           ;
-fuenf_4d  cmp.b     #MEN_IT_SEL_ZOOM,d0
-          bne       fuenf_4e
+*-----------------------------------------------------------------------------
+evt_menu_sel_zoom:
           tst.w     SEL_STATE(a6)       --- Zoom ---
           beq       evt_menu_rts3
           bsr       over_cut
@@ -434,8 +450,8 @@ zoom35    move.l    UNDO_SEL_X1Y1(a6),d0
           move.b    #-1,SEL_FLAG_DEL(a6)
 zoom36    bra       win_rdw
           ;
-fuenf_4e  cmp.b     #MEN_IT_SEL_DIST,d0
-          bne       fuenf_4f
+*-----------------------------------------------------------------------------
+evt_menu_sel_distort:
           tst.w     SEL_STATE(a6)       --- Distortion ---
           beq       evt_menu_rts3
           bsr       over_cut
@@ -468,8 +484,8 @@ zerr1     clr.l     18(a4)
           move.w    #-1,UNDO_STATE(a6)
           bra       win_rdw
           ;
-fuenf_4f  cmp.b     #MEN_IT_SEL_PROJ,d0
-          bne       evt_menu_rts3
+*-----------------------------------------------------------------------------
+evt_menu_sel_project:
           tst.w     SEL_STATE(a6)       --- Projection ---
           beq       evt_menu_rts3
           bsr       over_cut
@@ -482,10 +498,12 @@ fuenf_4f  cmp.b     #MEN_IT_SEL_PROJ,d0
           bsr       over_old
           bsr       save_scr
           bsr       save_buf
-evt_menu_rts3:
           rts
-*--------------------------------------------------------SUB-FUNCTIONS
-          ;
+
+*-----------------------------------------------------------------------------
+*               S U B - F U N C T I O N S
+*-----------------------------------------------------------------------------
+
 zoom_aus  move.w    UNDO_SEL_X1Y1+0(a6),d2       ** Zoom rect. **
           and.w     #$1f,d2
           move.w    #31,(a4)            { parameters: A0,A1,A4,D0,D1 }
@@ -576,6 +594,7 @@ zoom101   add.w     #80,a0
           dbra      d7,zoom16
           rts
           ;
+*-----------------------------------------------------------------------------
 zoom_div  move.w    d4,d6               ** calc. D3/D4 in presion "%.4f **
           add.w     d3,d6
           add.w     d3,d6
@@ -604,6 +623,7 @@ zoom_di1  add.w     d3,d4
 zoom_di2  move.l    #-7000000,d3
           rts
           ;
+*-----------------------------------------------------------------------------
 manu_pre  bsr       over_old            ** Switching screen **
           bsr       save_scr
           move.l    SEL_FRM_X1Y1(a6),UNDO_SEL_X1Y1(a6) ;(D7: frm. coords.)
@@ -636,6 +656,7 @@ manu_pr1  clr.l     (a0)+
           clr.w     MOUSE_RBUT(a6)
           rts
           ;
+*-----------------------------------------------------------------------------
 manu_mak  bsr       show_m              ** wait loop **
           clr.w     MOUSE_LBUT(a6)
 manu_ma1  tst.b     MOUSE_LBUT+1(a6)    done?
@@ -653,6 +674,7 @@ manu_ma2  clr.l     (a0)+
           clr.b     d0                  EQ: not cancelled
 manu_rts  rts
           ;
+*-----------------------------------------------------------------------------
 manu_end  bsr       hide_m              ** old log base **
           move.w    #-1,-(sp)
           move.l    logbase,-(sp)
@@ -673,6 +695,7 @@ manu_en2  bsr       save_buf            save old image
           move.l    BILD_ADR(a4),a0
           bra       work_bl2
           ;
+*-----------------------------------------------------------------------------
 zerr_aus  jsr       zerr_p1             ** distort rect. **
           move.w    UNDO_SEL_X1Y1+0(a6),d2       start bit no.
           and.w     #$1f,d2
@@ -777,6 +800,7 @@ zerr_d11  add.w     d5,2(a4)            left
           subq.l    #4,a1
 zerr_d1e  rts
           ;
+*-----------------------------------------------------------------------------
 rota_aus  move.w    UNDO_SEL_X1Y1+0(a6),d2       ** Rotation selection **
           move.w    d2,d3
           lsr.w     #3,d2               source address
@@ -882,11 +906,11 @@ rotate7   add.w     d5,d4
           sub.w     #80,a1
 rotate8   dbra      d7,rotate1
           rts
-*--------------------------------------------------------------STRINGS
+*--------------------------------------------------------------STRINGS--------
 stralzoo  dc.b   '[1][Zoom factor was reduced to stay|'
           dc.b   'within maximum image size'
           dc.b   '][Ok|Cancel]',0
-*-----------------------------------------------------------------DATA
+*-----------------------------------------------------------------DATA--------
 sinus     dc.w  0,572,1144,1715,2268,2856,3425,3993,4560,5126,5690
           dc.w  6252,6813,7371,7927,8481,9032,9580,10126,10668,11207
           dc.w  11743,12275,12803,13328,13848,14365,14876,15384,15886
@@ -897,7 +921,7 @@ sinus     dc.w  0,572,1144,1715,2268,2856,3425,3993,4560,5126,5690
           dc.w  29935,30163,30382,30592,30792,30983,31164,31336,31499
           dc.w  31651,31795,31928,32052,32166,32270,32365,32449,32524
           dc.w  32588,32643,32688,32723,32748,32763,32768
-*---------------------------------------------------------------------
+*-----------------------------------------------------------------------------
 stack     ds.w   1000 /* FIXME multi-purpose buffer of undefined size */
-*---------------------------------------------------------------------
+*-----------------------------------------------------------------------------
           END

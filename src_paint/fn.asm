@@ -32,9 +32,9 @@
  ;
  XREF  aescall,vdicall
  XREF  bildbuff,rec_adr,menu_adr,koanztab
- XREF  show_m,hide_m,save_scr,win_rdw,rsrc_gad,drei_chg
+ XREF  show_m,hide_m,save_scr,win_rdw,rsrc_gad
  XREF  save_buf,win_abs,copy_blk,win_xy,koos_mak,alertbox
- XREF  logbase,get_koos,over_que,fram_del,fuenf_4b,koostr1
+ XREF  logbase,get_koos,over_que,fram_del,evt_menu_sel_pt2,koostr1
  ;
  XDEF  choofig,chootxt,chooras,choopat,frraster,frinfobo,frsegmen
  XDEF  frkoordi,frmodus,frpunkt,frpinsel,frsprayd,frmuster,frtext
@@ -42,31 +42,46 @@
  XDEF  form_do,form_del,form_buf,form_wrt,frzeiche
  XDEF  chookoo,work_bl2,init_ted,maus_neu,over_beg,over_old
  XDEF  maus_bne,cent_koo,over_cut,frrotier,frzerren,frzoomen,frprojek
- XDEF  evt_menu_attr,evt_menu_shapes
+ XDEF  evt_menu_shapes,evt_menu_attr,evt_menu_sel
 
-**********************************************************************
+*-----------------------------------------------------------------------------
+* This module handles menu commands in the Desk and File menus. The respective
+* handlers are called out of the main event loop when notified by AES that
+* a menu entry in one of the menus was selected by the user.
+*-----------------------------------------------------------------------------
 *   Global register mapping:
 *
 *   a4   Address of address of current window record
 *   a6   Base address of data section
-**********************************************************************
+*-----------------------------------------------------------------------------
 
-*---------------------------------------------------------------------
+*-----------------------------------------------------------------------------
 *               S H A P E S   M E N U
-*---------------------------------------------------------------------
+*-----------------------------------------------------------------------------
 evt_menu_shapes:
-          cmp.b     #MEN_IT_CHK_FILL,d0
-          bhs       drei_2e
+          cmp.w     #MEN_IT_PENCIL,d0
+          blo.s     evt_menu_rts2
+          cmp.w     #MEN_IT_CHK_FILL,d0
+          blo       evt_menu_shapes_sel
+          cmp.w     #MEN_IT_ARC_SEG,d0
+          blo       evt_menu_shapes_opt_fill_bd_rd
+          beq       evt_menu_shapes_opt_arc
+evt_menu_rts2:
+          rts
+
+*-----------------------------------------------------------------------------
+evt_menu_shapes_sel:
           move.w    d0,d2               --- Shape selection ---
           move.w    choofig,d0
-          cmp.w     #MEN_IT_CHK_SEL,d0  selection?
-          bne.s     drei_chg
+          cmp.w     #MEN_IT_CHK_SEL,d0  previous shape/tool was "selection"?
+          bne.s     shape_sel_changed
           bsr       over_que            ask to confirm "commit selection?"
           bne       evt_menu_rts
           move.w    d2,-(sp)
           bsr       fram_del
           move.w    (sp)+,d2
-drei_chg  move.w    choofig,d0          disable prev. tool
+shape_sel_changed:
+          move.w    choofig,d0          disable prev. tool
           clr.w     d1
           bsr       check_xx
           move.w    d2,d0               enable new tool
@@ -75,17 +90,17 @@ drei_chg  move.w    choofig,d0          disable prev. tool
           moveq.l   #1,d1
           bsr       check_xx
           lea       chootab,a0          ++ en/disable shape options in menu ++
-          cmp.b     #MEN_IT_CHK_SEL,d2
+          cmp.w     #MEN_IT_CHK_SEL,d2
           bhs.s     figur1
-          cmp.b     #MEN_IT_CURVE,d2
+          cmp.w     #MEN_IT_CURVE,d2
           beq.s     figur1
-          cmp.b     #MEN_IT_LINE,d2     enable none of the options
+          cmp.w     #MEN_IT_LINE,d2     enable none of the options
           bls.s     figur1
           addq.l    #1,a0
-          cmp.b     #MEN_IT_SQR,d2      enable fill, border & rounded options (rect. et.al.)
+          cmp.w     #MEN_IT_SQR,d2      enable fill, border & rounded options (rect. et.al.)
           bls.s     figur1
           addq.l    #1,a0
-          cmp.b     #MEN_IT_POLYGN,d2   enable fill & border options only (rounded polygon is not sup'ed)
+          cmp.w     #MEN_IT_POLYGN,d2   enable fill & border options only (rounded polygon is not sup'ed)
           beq.s     figur1
           addq.l    #1,a0               enable fill, border & arc/segment options (circle et.al.)
 figur1    moveq.l   #3,d0               enable resp. attributes
@@ -100,8 +115,8 @@ figur3    add.w     #RSC_OBJ_SZ,a3
           bsr       koo_chk             disable "Coordinates" if needed
           rts
           ;
-drei_2e   cmp.w     #MEN_IT_ARC_SEG,d0
-          beq.s     drei_31
+*-----------------------------------------------------------------------------
+evt_menu_shapes_opt_fill_bd_rd:
           move.w    d0,d1               --- Switch tool attributes ---
           move.w    d0,d2
           sub.w     #MEN_IT_CHK_FILL,d1 ;calc option index 0..2
@@ -128,7 +143,9 @@ shapopt1  moveq.l   #MEN_IT_CHK_FILL,d0 ;enable flood-fill
 shapopt2  bsr       check_xx
           rts
           ;
-drei_31   moveq.l   #2,d2               --- Tool: Arc ---
+*-----------------------------------------------------------------------------
+evt_menu_shapes_opt_arc:
+          moveq.l   #2,d2               --- Tool: Arc ---
           lea       frsegmen,a2
           bsr       form_do
           bsr       form_del
@@ -152,21 +169,24 @@ segmen1   lea       chooset+6,a0        no -> check-off "arc" entry
           bsr       check_xx
           rts
           ;
-*---------------------------------------------------------------------
+*-----------------------------------------------------------------------------
 *               A T T R I B U T E S   M E N U
-*---------------------------------------------------------------------
+*-----------------------------------------------------------------------------
 evt_menu_attr:
-          sub.b     #MEN_IT_CFG_COMB,d0 ;--- Attribute dialog windows ---
+          cmp.w     #MEN_IT_CFG_FILE,d0 ;--- Attribute dialog windows ---
+          bhi       evt_menu_rts2
+          sub.w     #MEN_IT_CFG_COMB,d0
+          bcs       evt_menu_rts2
           move.w    d0,d2
           add.w     #5,d2
           lsl.w     #2,d0
-          ext.l     d0
           lea       fr_tab,a0           calc. address of the dialog data
-          add.l     d0,a0
+          add.w     d0,a0
           lea       frbase,a2
           add.w     2(a0),a2
           move.w    (a0),d2
           bsr       form_do             display the dialog window
+          ;
 attrib13  cmp.w     (a2),d4             abort button clicked?
           bhs       attrib12
           cmp.w     #13,2(a2)           is pattern selection dialog?
@@ -289,25 +309,47 @@ attrib20  cmp.w     #20,2(a2)           -- Linie attribute dialog --
           bsr       obj_draw
 attrib21  bsr       form_lin            line pattern demo
 attrib23  moveq.l   #-1,d1              wait for release of mouse button
-          move.l    a0,a0
+attrib24  move.l    a0,a0
           move.l    a0,a0
           tst.b     MOUSE_LBUT+1(a6)
-          dbeq      d1,attrib23+2
+          dbeq      d1,attrib23
           clr.w     MOUSE_LBUT(a6)
           bsr       form_do2            back to dialog handler
           bra       attrib13
           ;
 attrib12  bsr       form_del
-evt_menu_rts2:
           rts
           ;
-*---------------------------------------------------------------------
+*-----------------------------------------------------------------------------
 *               S E L E C T I O N   M E N U
-*---------------------------------------------------------------------
-          ;
+*-----------------------------------------------------------------------------
 evt_menu_sel:
-          cmp.b     #MEN_IT_CHK_SEL,d0
-          bne.s     fuenf_48
+          cmp.w     #MEN_IT_CHK_SEL,d0
+          beq       evt_menu_sel_enable
+          cmp.w     #MEN_IT_SEL_PAST,d0
+          beq       evt_menu_sel_paste
+          cmp.w     #MEN_IT_SEL_DISC,d0
+          beq       evt_menu_sel_discard
+          cmp.w     #MEN_IT_SEL_COMI,d0
+          beq       evt_menu_sel_commit
+          ;
+          cmp.w     #MEN_IT_SEL_ERA,d0
+          beq       evt_menu_sel_era_blk_inv
+          cmp.w     #MEN_IT_SEL_BLCK,d0
+          beq       evt_menu_sel_era_blk_inv
+          cmp.w     #MEN_IT_SEL_INV,d0
+          bhi.s     evt_menu_sel_era_blk_inv
+          ;
+          cmp.w     #MEN_IT_SEL_COMB,d0
+          beq       evt_menu_sel_comb
+          cmp.w     #MEN_IT_SEL_COPY,d0
+          beq       evt_menu_sel_copy
+          cmp.w     #MEN_IT_SEL_OVL,d0
+          beq       evt_menu_sel_ovl
+          bra       evt_menu_sel_pt2              ;transformations: next module
+
+*-----------------------------------------------------------------------------
+evt_menu_sel_enable:
           move.w    d0,d2               --- Selection on/off ---
           tst.b     SEL_OPT_OVERLAY(a6)
           beq       fuenf_43            overlay mode enabled?
@@ -318,12 +360,10 @@ evt_menu_sel:
           clr.w     d1
           bsr       check_xx
 fuenf_43  moveq.l   #MEN_IT_CHK_SEL,d2
-          bra       drei_chg
+          bra       shape_sel_changed
           ;
-fuenf_48  cmp.b     #MEN_IT_SEL_ERA,d0
-          blo.s     fuenf_52
-          cmp.b     #MEN_IT_SEL_INV,d0
-          bhi.s     fuenf_52
+*-----------------------------------------------------------------------------
+evt_menu_sel_era_blk_inv:
           tst.w     SEL_STATE(a6)       --- Clear/Fill black/Invert ---
           beq       evt_menu_rts2
           bsr       over_cut
@@ -344,8 +384,8 @@ white1    bsr       save_scr
           bsr       men_iena
           bra       win_rdw
           ;
-fuenf_52  cmp.b     #MEN_IT_SEL_COMB,d0
-          bne.s     fuenf_51
+*-----------------------------------------------------------------------------
+evt_menu_sel_comb:
           lea       frverknu,a2         --- Combine selection with background ---
           moveq.l   #14,d2
           bsr       form_do
@@ -362,16 +402,16 @@ knupf1    moveq.l   #MEN_IT_SEL_COMB,d0
           bsr       check_xx
           rts
           ;
-fuenf_51  cmp.b     #MEN_IT_SEL_COPY,d0
-          bne.s     fuenf_53
+*-----------------------------------------------------------------------------
+evt_menu_sel_copy:
           not.b     SEL_OPT_COPY(a6)    --- Copy ---
           move.b    SEL_OPT_COPY(a6),d1
           and.w     #1,d1
           bsr       check_xx
           rts
           ;
-fuenf_53  cmp.b     #MEN_IT_SEL_OVL,d0
-          bne       fuenf_44
+*-----------------------------------------------------------------------------
+evt_menu_sel_ovl:
           tst.b     SEL_OPT_OVERLAY(a6) ;--- Toggle Overlay Mode ---
           beq.s     overlay1
           bsr       over_que            ++ Leaving overlay mode ++
@@ -412,8 +452,8 @@ overlay3  moveq.l   #1,d0               abort due to memory allocation failure
           bsr       alertbox
           rts
           ;
-fuenf_44  cmp.b     #MEN_IT_SEL_PAST,d0
-          bne       fuenf_45
+*-----------------------------------------------------------------------------
+evt_menu_sel_paste:
           tst.w     SEL_STATE(a6)       --- Paste selection ---
           bne       einfug5
           tst.b     SEL_FLAG_PASTABLE(a6)
@@ -447,7 +487,7 @@ einfug2   bsr       win_abs             calc window coords.
           move.l    bildbuff,a0
 einfug3   bsr       copy_blk
           move.w    #MEN_IT_CHK_SEL,d2  check "selection" menu item
-          bsr       drei_chg
+          bsr       shape_sel_changed
           move.w    #-1,UNDO_STATE(a6)  ;enable undo
           move.l    #-1,UNDO_SEL_X1Y1(a6)
           move.l    #-1,UNDO_SEL_X2Y2(a6)
@@ -489,8 +529,8 @@ einfug5   ;                             ++ Overlay-Mode-II ++
           bsr       men_idis
           rts
           ;
-fuenf_45  cmp.b     #MEN_IT_SEL_DISC,d0
-          bne       fuenf_46
+*-----------------------------------------------------------------------------
+evt_menu_sel_discard:
           tst.w     SEL_STATE(a6)       --- Discard selection ---
           beq       evt_menu_rts2
           move.b    SEL_OPT_OVERLAY(a6),d0
@@ -520,8 +560,8 @@ werfweg1  move.l    (a0)+,(a1)+
           bsr       men_idis
           bra       win_rdw
           ;
-fuenf_46  cmp.b     #MEN_IT_SEL_COMI,d0
-          bne       fuenf_4b
+*-----------------------------------------------------------------------------
+evt_menu_sel_commit:
           tst.w     SEL_STATE(a6)       --- Commit selection ---
           beq       evt_menu_rts2
           tst.b     SEL_OPT_OVERLAY(a6)
@@ -570,23 +610,42 @@ ueber4    tst.b     SEL_CUR_COMB(a6)    + keep "commit" enabled? +
           moveq.l   #MEN_IT_SEL_COMI,d0 ;disable "commit"
           bsr       men_idis
 ueber5    rts
-          ;
-*---------------------------------------------------------------------
+
+*-----------------------------------------------------------------------------
 *               T O O L S   M E N U
-*---------------------------------------------------------------------
+*-----------------------------------------------------------------------------
 evt_menu_tools:
-          cmp.b     #MEN_IT_CHK_COOR,d0
-          bne.s     sechs_5c
+          cmp.w     #MEN_IT_CHK_COOR,d0
+          beq       evt_menu_tool_stkoo
+          cmp.w     #MEN_IT_COORDS,d0
+          beq       evt_menu_tool_coords
+          cmp.w     #MEN_IT_VIEW_ZOM,d0
+          beq       evt_menu_tool_zoom_view
+          cmp.w     #MEN_IT_FULL_SCR,d0
+          beq       evt_menu_tool_full_scr
+          ;
+          cmp.w     #MEN_IT_CFG_MOUS,d0
+          beq       evt_menu_tool_cfg_mouse
+          cmp.w     #MEN_IT_SHOW_COO,d0
+          beq       evt_menu_tool_show_coo
+          cmp.w     #MEN_IT_CHK_GRID,d0
+          beq       evt_menu_tool_chk_grid
+          cmp.w     #MEN_IT_CFG_GRID,d0
+          beq       evt_menu_tool_cfg_grid
+          rts
+
+*-----------------------------------------------------------------------------
+evt_menu_tool_stkoo:
           move.w    d0,d7               --- Command: Store mouse coords. ---
           bsr       over_que
           bne       evt_menu_rts2
           move.w    d7,-(sp)
           bsr       fram_del
           move.w    (sp)+,d2
-          bra       drei_chg
-          ;
-sechs_5c  cmp.b     #MEN_IT_CFG_GRID,d0
-          bne.s     sechs_5a
+          bra       shape_sel_changed
+
+*-----------------------------------------------------------------------------
+evt_menu_tool_cfg_grid:
           moveq.l   #15,d2              --- Command: Configure grid size ---
           lea       frraster,a2
           bsr       form_do             display dialog window
@@ -603,18 +662,18 @@ raster1   move.w    28(a2),d1
           add.w     #14,a2
 raster2   dbra      d2,raster1
           rts
-          ;
-sechs_5a  cmp.b     #MEN_IT_CHK_GRID,d0
-          bne.s     sechs_59
+
+*-----------------------------------------------------------------------------
+evt_menu_tool_chk_grid:
           lea       chooras,a0          --- Enable/disable rastering ---
           move.w    (a0),d1
           eor.b     #1,d1
           move.w    d1,(a0)
           bsr       check_xx
           rts
-          ;
-sechs_59  cmp.b     #MEN_IT_SHOW_COO,d0
-          bne.s     sechs_56
+
+*-----------------------------------------------------------------------------
+evt_menu_tool_show_coo:
           lea       chookoo,a0          --- Enable/disable: Show mouse coords. ---
           move.w    (a0),d1
           eor.b     #1,d1
@@ -629,11 +688,11 @@ sechs_59  cmp.b     #MEN_IT_SHOW_COO,d0
           trap      #1
           addq.l    #6,sp
           rts
-          ;
-sechs_56  cmp.b     #MEN_IT_COORDS,d0
-          bne.s     sechs_57
+
+*-----------------------------------------------------------------------------
+evt_menu_tool_coords:
           move.w    choofig,d1          --- Coordinates ---
-          cmp.b     #MEN_IT_CHK_SEL,d1
+          cmp.w     #MEN_IT_CHK_SEL,d1
           bne.s     koord1
           moveq.l   #MEN_IT_RECT,d1
 koord1    lea       koanztab,a0
@@ -646,8 +705,8 @@ koord1    lea       koanztab,a0
           ;beq.s     koords              cancel
 koord2    rts
 
-sechs_57  cmp.b     #MEN_IT_CFG_MOUS,d0
-          blo.s     sechs_58
+*-----------------------------------------------------------------------------
+evt_menu_tool_cfg_mouse:
           lea       choomou,a2          --- Mouse form attribute ---
           not.b     1(a2)               toggle between 0 (arrow) and 255 (user-defined)
           bsr       maus_neu
@@ -655,16 +714,20 @@ sechs_57  cmp.b     #MEN_IT_CFG_MOUS,d0
           move.w    choomou,d1
           and.w     #1,d1
           bra       check_xx
-          ;
-sechs_58  cmp.b     #MEN_IT_FULL_SCR,d0
-          blo.s     sechs_55
-          lea       stralabs,a0
+
+*-----------------------------------------------------------------------------
+evt_menu_tool_full_scr:
+          lea       stralabs,a0         --- Full-screen mode (info) ---
           moveq.l   #1,d0
           bra       alertbox
-          ;
-sechs_55  rts                           --- Zoom View ---
 
-*---------------------------------------------------------SUBFUNCTIONS
+*-----------------------------------------------------------------------------
+evt_menu_tool_zoom_view:
+          rts                           --- Zoom View ---
+
+*-----------------------------------------------------------------------------
+*               S U B - F U N C T I O N S
+*-----------------------------------------------------------------------------
 
 check_xx  ;
           aes       31 2 1 1 0 !d0 !d1 !menu_adr  ;menu_icheck
@@ -676,6 +739,7 @@ men_iena  ;
           aes       32 2 1 1 0 !d0 1 !menu_adr  ;menu_ienable (intin[1]:=enable)
           rts                                      D0:index/D1:0-1
           ;
+*-----------------------------------------------------------------------------
 maus_bne  moveq.l   #2,d0               shape: bee
           bra.s     maus_al2
 maus_neu  move.w    choomou,d0          ** current mouse pointer shape **
@@ -686,16 +750,19 @@ maus_al2  move.l    a0,-(sp)
           aes       78 1 1 1 0 !d0 !a0  ;set_mouse_form
           move.l    (sp)+,a0
           rts
+*-----------------------------------------------------------------------------
 obj_off   ;
           aes       44 1 3 1 0 !d0 !a3  ;XY-Koo. des D0. Objektes
           rts
           ;
+*-----------------------------------------------------------------------------
 obj_draw  move.l    d6,INTIN+4(a6)            ** draw object **
           move.l    d7,INTIN+8(a6)
           move.l    a3,ADDRIN+0(a6)
           aes       42 6 1 1 0 !d0 !d1  ;obj_draw
           rts
           ;
+*-----------------------------------------------------------------------------
 over_cut                                ** "discard clipped selection?" **
           tst.b     SEL_OPT_OVERLAY(a6)
           beq.s     over_cu2
@@ -713,6 +780,7 @@ over_cu2  rts
 over_cu1  addq.l    #4,sp               no -> abort
           rts
           ;
+*-----------------------------------------------------------------------------
 over_old  move.b    SEL_OPT_OVERLAY(a6),d0  ;** undo combination **
           beq       over_ol3
           tst.b     SEL_CUR_COMB(a6)
@@ -743,6 +811,7 @@ over_ol1  move.b    #-1,SEL_FLAG_CHG(a6)  ; modification done
           bsr       men_idis
 over_ol3  rts
           ;
+*-----------------------------------------------------------------------------
 over_alo  tst.l     SEL_OV_BUF(a6)      ** Allocate memory for selection overlay buffer **
           bne       over_al1
           move.l    #32010,-(sp)
@@ -757,6 +826,7 @@ over_al1  move.b    #$ff,SEL_OPT_OVERLAY(a6)
 over_al2  clr.b     SEL_OPT_OVERLAY(a6)
           rts
 
+*-----------------------------------------------------------------------------
 over_beg  move.w    #1999,d0            ** Prepare overlay mode **
           move.l    rec_adr,a0
           move.l    BILD_ADR(a0),a0
@@ -772,6 +842,7 @@ over_be1  move.l    (a0)+,(a1)+
           clr.w     d3                  combination mode Z=0 -> erase selection frame from OV buffer
           ;fall-through
           ;
+*-----------------------------------------------------------------------------
 work_blk  move.l    SEL_FRM_X1Y1(a6),d0       ** Execute raster copy via VDI **
           move.l    SEL_FRM_X2Y2(a6),d1
 work_bl2  lea       mfdb_q,a1           address of source+target MFDB struct array
@@ -792,6 +863,7 @@ work_bl2  lea       mfdb_q,a1           address of source+target MFDB struct arr
           vdi       109 4 1             ;copy_raster
           rts
           ;
+*-----------------------------------------------------------------------------
 cent_koo  moveq.l   #1,d7               ** Center selection **
           move.l    #$27f018f,d6        D2: selection width/height; compare to max 640-1/400-1
 cent_ko1  cmp.w     (a2),d2             does selection fit into the window?
@@ -833,6 +905,7 @@ cent_ko3  subq.l    #2,a2               ++ end of loop ++
           dbra      d7,cent_ko1
           rts
           ;
+*-----------------------------------------------------------------------------
 form_do   bsr       maus_alt            ** Open dialog window **
           aes       107 1 1 0 0 1       ;wind_update
           move.w    d2,d1
@@ -910,6 +983,7 @@ form6     addq.l    #4,sp
           bsr       obj_draw
           bra       form_do2
           ;
+*-----------------------------------------------------------------------------
 form_tak  move.w    TED_NR(a2),d0       --- Process dialog input ---
           bmi.s     form_tk1
           bsr       read_num            ++ TEDINFOS ++
@@ -952,6 +1026,7 @@ form_tk6  add.w     #RSC_OBJ_SZ,a0
           move.w    d1,(a0)
           bra       form_rw1
           ;
+*-----------------------------------------------------------------------------
 form_rdw  move.l    a2,-(sp)            --- insert defaults ---
           move.w    form_buf,d0
           beq.s     form_rw2
@@ -999,6 +1074,7 @@ form_rx2  add.w     #RSC_OBJ_SZ,a0
 form_rw1  subq.l    #2,a2
           rts
           ;
+*-----------------------------------------------------------------------------
 form_wrt  move.l    TED_ADR(a2),a0      ** Print decimal number **
           move.w    TED_LEN(a2),d1      D0.w: value / A0: address of record
           add.w     d1,a0
@@ -1015,6 +1091,7 @@ form_wr2  add.b     #'0',d0
           dbra      d1,form_wr1
           rts
           ;
+*-----------------------------------------------------------------------------
 form_del  move.l    rec_adr,a4          ** Remove dialog window **
           aes       104 2 5 0 0 !(a4) 10  ;wind_get
           move.w    INTOUT+2(a6),d0
@@ -1032,6 +1109,7 @@ form_de1  move.l    d6,INTIN+2(a6)
           bne       maus_neu
           rts
           ;
+*-----------------------------------------------------------------------------
 form_mud  bsr       hide_m              ** Fill pattern definition box **
           moveq.l   #4,d0
           bsr       obj_off
@@ -1060,10 +1138,10 @@ form_mu5  addq.l    #1,a1
           bra.s     form_mu7
 form_mus  bsr       hide_m              ** Fill pattern demo box **
 form_mu7  ;
-          vdi       23 0 1 !6(a2)
-          vdi       24 0 1 !20(a2)
-          vdi       25 0 1 1
-          vdi       32 0 1 1
+          vdi       23 0 1 !6(a2)       ;fill style
+          vdi       24 0 1 !20(a2)      ;fill index
+          vdi       25 0 1 1            ;fill color
+          vdi       32 0 1 1            ;set_writing_modus
           cmp.w     #4,6(a2)
           bne.s     form_mu2
           moveq.l   #15,d0
@@ -1085,15 +1163,16 @@ form_mu2  moveq.l   #5,d0
           vdi       32 0 1 3
           bra       show_m
           ;
+*-----------------------------------------------------------------------------
 form_lin  bsr       hide_m              ** Draw line pattern demo **
           moveq.l   #4,d0
           clr.w     d1
           bsr       obj_draw            remove box
-          vdi       15 0 1 !34(a2)
-          vdi       16 1 0 !20(a2) 0
-          vdi       17 0 1 1
-          vdi       113 0 1 !choopat
-          vdi       32 0 1 1
+          vdi       15 0 1 !34(a2)      ;line type/style
+          vdi       16 1 0 !20(a2) 0    ;line width
+          vdi       17 0 1 1            ;line color
+          vdi       113 0 1 !choopat    ;line pattern
+          vdi       32 0 1 1            ;set_writing_modus
           moveq.l   #4,d0
           bsr       obj_off
           move.l    INTOUT+2(a6),d0
@@ -1112,6 +1191,7 @@ form_lin  bsr       hide_m              ** Draw line pattern demo **
           vdi       32 0 1 3
           bra       show_m
           ;
+*-----------------------------------------------------------------------------
 read_num  move.l    TED_ADR(a2),a0      ** Evaluate TEDINFO string **
           move.w    TED_LEN(a2),d2
           clr.w     d0
@@ -1131,6 +1211,7 @@ readloop  move.b    (a0)+,d0
           dbra      d2,readloop
 read1     rts
           ;
+*-----------------------------------------------------------------------------
 init_ted  tst.w     2(a2)               ** set TEDINFO addresses **
           bmi       evt_menu_rts2
           move.l    TED_ADR+2(a2),a0
@@ -1150,7 +1231,7 @@ init_te1  moveq.l   #8,d0
           bpl       init_te1
           move.l    (sp)+,a2
           rts
-*-------------------------------------------------------MENU-VARIABLES
+*-------------------------------------------------------MENU-VARIABLES--------
 choofig   dc.w   MEN_IT_PENCIL          ; ID of selected shape (menu item ID)
 chooseg   dc.w   0,3600                 ; start and end angle for arc in 1/10th degree
           ;                             --- Shape menu option state ---
@@ -1171,7 +1252,7 @@ choomou   dc.w    0                     ; flag: 0:=normal mouse shape; $ff:cross
 chookoo   dc.w    0                     ; flag: 0:disabled; 1:enable mouse coord. display in menu bar
           dc.w    -1,-1                 ; last written mouse X/Y coords.
 choofil   dcb.w   16,0                  ; bitmasks of user-defined fill pattern
-*--------------------------------------------------------------STRUCTS
+*--------------------------------------------------------------STRUCTS--------
 comb_dat  dc.b    0,1,6,7,2,11,4,13,14,9,8
 work_dat  dc.w    0,15,10               ; raster copy combination mode: Z=0;Z=1;Z=!Q
 mfdb_q    dc.w    0000,0000,00,00,40,0,1,0,0,0
@@ -1180,7 +1261,7 @@ maus_blk  dc.w    7,7,1,0,1,$fffe,$fffe,$c386,$c386,$c386,$c386,$fc7e
           dc.w    $fc7e,$fc7e,$c386,$c386,$c386,$c386,$fffe,$fffe,0
           dc.w    $fffe,$8102,$8102,$8102,$8102,$8102,$8002,$fc7e
           dc.w    $8002,$8102,$8102,$8102,$8102,$8102,$fffe,0
-*--------------------------------------------------------------STRINGS
+*--------------------------------------------------------------STRINGS--------
 stralspi  dc.b    '[0][Mirror around which axis?| |'
           dc.b    '][Horizontal|Cancel|Vertical]',0
 stralovn  dc.b    '[3][Not enough free memory'
@@ -1192,10 +1273,10 @@ stralabs  dc.b    '[1][Click with the right mouse|'
           dc.b    'button into a window for|'
           dc.b    'toggling full-screen mode'
           dc.b    '][Ok]',0
-*-------------------------------------------------------DIALOG-STRUCTS
+*-------------------------------------------------------DIALOG-STRUCTS--------
 *   Ok-Nr, { TED-Nr,L„nge-1,Default,Index*256+min,max,Offset.l } ,-1,
 *          { Button-Nr*256+selected Button } ,0
-*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 frinfobo  dc.w   8,-1,0
 frsegmen  dc.w   9,4,2,0,8,360,0,0,4,0,0,8,9,0,3
           dc.w     4,2,0,8,360,0,4,4,0,0,8,9,0,7,-1,0
@@ -1227,7 +1308,7 @@ frzoomen  dc.w  13,31,0,1,10,9,0,0,31,2,500,10,999,0,1
 frzerren  dc.w  16,32,1,4,15,99,0,0,-1,$400,$800,0
 frprojek  dc.w  13,-1,$400,$800,0
 fruebern  dc.w  05,-1,$300,0
-*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
           ; table of attribute forms, indexed by menu entry
 fr_tab    dc.w    RSC_FORM_COMB,frmodus-frbase     ; MEN_IT_CFG_COMB
           dc.w    -1,-1                            ; menu separator
@@ -1243,6 +1324,6 @@ fr_tab    dc.w    RSC_FORM_COMB,frmodus-frbase     ; MEN_IT_CFG_COMB
           dc.w    RSC_FORM_FILE,frdatei-frbase     ; MEN_IT_CFG_FILE
           dc.w    -1                               ; MEN_IT_CFG_WIN
 form_buf  ds.w    4
-*---------------------------------------------------------------------
+*-----------------------------------------------------------------------------
           align   2
           end

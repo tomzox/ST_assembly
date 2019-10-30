@@ -30,7 +30,7 @@
  include "f_sys.s"
  include "f_def.s"
  ;
- XREF  evt_butt,fram_drw
+ XREF  evt_butt,fram_drw,fram_del
  XREF  alertbox,koos_mak,wind_chg,init_itemslct
  XREF  evt_menu_attr,evt_menu_sel,evt_menu_tools
  XREF  evt_menu_desk,evt_menu_file,evt_menu_shapes
@@ -38,9 +38,9 @@
  XDEF  aescall,vdicall
  XDEF  bildbuff,wi1,rec_adr,win_rdw,show_m,hide_m
  XDEF  save_scr,set_xx,rsrc_gad,vslidrw,wi_count,logbase
- XDEF  fram_del,fram_mod,copy_blk,rand_tab,menu_adr
+ XDEF  copy_blk,rand_tab,menu_adr
 
-**********************************************************************
+*-----------------------------------------------------------------------------
 *   Module structure:
 *   - FA: main entry, registered event+window+mouse handler entry funcs,
 *         window event handling, raster-copy sub-function
@@ -50,12 +50,25 @@
 *   - FN: ... cntd: Attributes, Selection, and Tools menus
 *   - FO: ... cntd: Selection rotate, zoom, distort
 *
-**********************************************************************
+*-----------------------------------------------------------------------------
 *   Global register mapping:
+*   - a4   Address of address of current window record (rec_adr)
+*   - a6   Base address of data section
 *
-*   a4   Address of address of current window record (rec_adr)
-*   a6   Base address of data section
-**********************************************************************
+*   General calling convention for sub-functions:
+*   - parameters are passed via registers starting at A0/D0
+*     (and in few cases via global variables)
+*   - register A0-A1/D0-D1 are not preserved by the callee and
+*     therefore values must be saved by caller if still needed;
+*     callee has to restore A2-A6/D2-D7 if modified - except for
+*     top-level functions such as message event handlers where it
+*     is known that the caller does not need the register state.
+*
+*   - register A6 is globally reserved as base address of data section
+*   - register A4 is reserved in several modules as address of the
+*     data structure describing the current window (this is noted at
+*     the top of these modules, such as this one)
+*-----------------------------------------------------------------------------
           ;
           move.l    a7,a5               --- Initialize application ---
           move.l    4(a5),a5
@@ -109,7 +122,7 @@
           move.w    INTOUT(a6),GRHANDLE(a6)
           vdi       100 0 11 1 1 1 1 1 1 1 1 1 1 2
           ;
-*---------------------------------------------------------SETUP-------
+*---------------------------------------------------------SETUP---------------
           ;
           lea       rscname,a0
           aes       110 0 1 1 0 !a0 ;rsrc_load
@@ -156,7 +169,12 @@
           move.l    a4,(a0)
           move.b    #-1,SEL_OPT_OVERLAY(a6)   enable selection overlay mode by default
           ;
-*--------------------------------------------------------EVENT-HANDLER
+*-----------------------------------------------------------------------------
+* This is the main loop and event handler of the application. The function
+* waits for event messages (menu & window events) but no longer than 70 ms.
+* Mouse movements and button events within the window are captured using
+* hooks in the interrupt handlers. The state written there is polled here.
+*
 evt_multi ;                                   ; wait for message, but max. 70ms
           lea       EV_MSG_BUF(a6),a0
           aes       25 16 7 1 0 %110000 0 0 0 0 0 0 0 0 0 0 0 0 0 70 0 !a0  ;evt_multi
@@ -228,7 +246,16 @@ evt_mul4  ;                             check for window event types
           beq       moved
 exec_rts  rts
 
-*-------------------------------------------------------WINDOW-HANDLER
+*-----------------------------------------------------------------------------
+* This function handles window redraw events, which usually are triggered by
+* a window being created or being exposed. The function first determines which
+* of the managed windows this event refers to, then iterates across all
+* exposed areas to redraw them. The latter is done by copying the respective
+* areas from the backing storage (i.e. window-specific image buffer)
+*
+* Additionally this function is called directly to force a redraw after
+* changes to the content (e.g. undo of a drawing operation)
+*
 redraw    bsr       hide_m              --- WM_Redraw - Procedure ---
           aes       107 1 1 0 0 1       ;wind_update
           move.l    EV_MSG_BUF+8(a6),d0
@@ -295,7 +322,7 @@ redraw6   cmp.w     d0,d1               no intersection?
           move.l    logbase,a1
           movem.l   d4-d7,-(sp)
           movem.l   a3/d0-d2,-(sp)
-          bsr       copy_blk
+          bsr       copy_blk            copy the area from the image buffer
           movem.l   (sp)+,a3/d0-d2
           tst.w     SEL_STATE(a6)       redraw rectangle?
           beq.s     redraw10
@@ -318,6 +345,10 @@ rw_end    ;
           aes       107 1 1 0 0 0       ;wind_update
           bra       show_m
           ;
+*-----------------------------------------------------------------------------
+* Handle the "topped" event which indicates a new window has been activated
+* and will receive focus.
+*
 topped    move.w    EV_MSG_BUF+6(a6),d3   --- Topped ---
           move.w    WIN_HNDL(a4),d2
           cmp.w     d3,d2
@@ -346,8 +377,13 @@ topped4   add.w     #WIN_STRUCT_SZ,a0
           bsr       prep_men            set state of "Save" menu entry
 topped5   move.w    d3,d1
           moveq.l   #10,d0
-          bra       set_xx
-          ;
+          bra       set_xx              ;wind_set WF_TOP
+
+*-----------------------------------------------------------------------------
+* The following function handle mouse clicks into the scrolling controls
+* (i.e. hor/vert. sliders and arrows). The function updates the slider
+* position and then redraws the window content accordingly.
+*
 hslid     clr.l     d1                  --- horizontal slider ---
           move.w    EV_MSG_BUF+8(a6),d1
           move.w    #640,d0
@@ -359,7 +395,7 @@ hslid     clr.l     d1                  --- horizontal slider ---
           move.w    EV_MSG_BUF+8(a6),d1
           move.w    d1,SCHIEBER(a4)
           moveq.l   #8,d0
-          bsr       set_xx              update slider pos.
+          bsr       set_xx              ;wind_set WF_HSLIDE: update slider pos.
           bra.s     vslidrw
           ;
 vslid     clr.l     d1                  --- vertical slider ---
@@ -375,7 +411,7 @@ vslid     clr.l     d1                  --- vertical slider ---
           bsr       divu_d0
           move.w    EV_MSG_BUF+8(a6),d1
           move.w    d1,SCHIEBER+2(a4)
-          moveq.l   #9,d0               update slider pos.
+          moveq.l   #9,d0               ;wind_set WF_VSLIDE: update slider pos.
           bsr       set_xx
 vslidrw   bsr       hide_m              ** Top-Window neuzeichnen **
           move.l    rec_adr,a0
@@ -426,7 +462,7 @@ arrowedA  mulu      #1000,d1
 arrowedB  divu      d2,d1
 arrowedC  moveq.l   #9,d0
           move.w    d1,SCHIEBER+2(a4)
-          bsr       set_xx
+          bsr       set_xx              ;wind_set WF_VSLIDE: update slider pos.
           bra       vslidrw
 arrowed1  cmp.b     #2,d0
           bne.s     arrowed2
@@ -506,6 +542,10 @@ arrowed7  cmp.b     #5,d0
           bsr       set_xx
           bra       vslidrw
           ;
+*-----------------------------------------------------------------------------
+* The fuollowing functions handle notification about a request to resize or
+* move a window.
+*
 sized     move.l    EV_MSG_BUF+8(a6),INTIN+4(a6)    --- Change of window size ---
           move.l    EV_MSG_BUF+12(a6),INTIN+8(a6)
           aes       105 6 1 0 0 !(a4) 5   ;wind_set
@@ -543,6 +583,9 @@ fulled2   move.l    d3,INTIN+4(a6)
           move.l    d4,d3
           bra       sizedsub
           ;
+*-----------------------------------------------------------------------------
+* Handle request to close a window.
+*
 closed    bsr       wind_chg            --- Close window ---
           beq.s     closed5
           lea       straldel,a0
@@ -613,6 +656,9 @@ closed2   moveq.l   #MEN_IT_DISC,d0     all windows closed -> disable menu entri
           moveq.l   #MEN_IT_PRINT,d0    disble "print"
           bra       men_idis
           ;
+*-----------------------------------------------------------------------------
+* Enter fullscreen mode after a click with the right mouse-button.
+*
 absmod    move.l    rec_adr,a4          ** Switch into full-screen mode **
           move.w    WIN_HNDL(a4),d0
           bmi       evt_multi
@@ -657,7 +703,7 @@ absmod4   bsr       hide_m              +++ Leaving full-screen mode +++
           add.w     #12,sp
           bsr       show_m
           lea       bildbuff,a1
-          move.l    2(a4),(a1)
+          move.l    BILD_ADR(a4),(a1)
           lea       rec_adr,a0
           move.l    (sp)+,a4
           move.l    a4,(a0)
@@ -677,7 +723,7 @@ show_m    move.l    #$7a0000,CONTRL+0(a6)      show_cursor
           bra       vdicall
           ;
 set_xx    ;
-          aes       105 3 1 0 0 !(a4) !d0 !d1  ;wind_set
+          aes       105 3 1 0 0 !WIN_HNDL(a4) !d0 !d1  ;wind_set
           rts
           ;
 rsrc_gad  clr.w     d0
@@ -685,9 +731,9 @@ rsrc_gad  clr.w     d0
           rts
           ;
 get_top   move.l    rec_adr,a1          ** Return handle of top-level window **
-          aes       104 2 5 0 0 !(a1) 10  ;wind_get
-          move.w    INTOUT+2(a6),d0
-          cmp.w     (a1),d0
+          aes       104 2 5 0 0 !WIN_HNDL(a1) 10  ;wind_get: WF_TOP
+          move.w    INTOUT+2(a6),d0     Retrieve handle of the top-most window
+          cmp.w     WIN_HNDL(a1),d0     compare with handle of active window
           rts
           ;
 win_rdw   bsr       get_top             ** Redraw screen **
@@ -705,7 +751,9 @@ prep_men  move.l    BILD_ADR(a4),a0     ** Set State of "Save" menu entry **
           bne       men_iena            yes -> enable "save"
           bra       men_idis            no -> disable "save"
           ;
+*-----------------------------------------------------------------------------
 divu1000  move.l    #1000,d0
+          ; alternate entry point
 divu_d0   cmp.l     d0,d1               ** D1 := D1 / D0 **
           bhs.s     divu_d01
           swap      d1
@@ -713,6 +761,7 @@ divu_d0   cmp.l     d0,d1               ** D1 := D1 / D0 **
 divu_d01  divu      d0,d1
 divu_d02  rts
           ;
+*-----------------------------------------------------------------------------
 main_rcs_err:
           lea       stralrsc,a0         ** Error loading AES resource file **
           moveq.l   #1,d0
@@ -722,6 +771,11 @@ main_err  clr.w     -(sp)               ** Error initialization -> exit program 
           trap      #1
           bra       main_err
           ;
+*-----------------------------------------------------------------------------
+* This function is installed as hook in the mouse button interrupt handler
+* (i.e. it is called for each button press or release). The function keeps
+* track of the state of left and right mouse button.
+*
 maus_kno  subq.l    #4,sp               ** Mouse button interrupt **
           movem.l   a0/a6,-(sp)
           lea       dsect_a6,a6
@@ -766,6 +820,10 @@ maus_kn6  move.l    MOUSE_VEC_BUT(a6),8(sp) ;place address of standard handler o
           movem.l   (sp)+,a0/a6         restore registers
           rts                           ;jump via RTS so that no register is needed
           ;
+*-----------------------------------------------------------------------------
+* This function is installed as hook in the mouse movement interrupt handler.
+* The function only stores the current X/Y coordinates.
+*
 maus_mov  subq.l    #8,sp               ** Mouse movement interrupt **
           move.l    a6,(sp)
           lea       dsect_a6,a6
@@ -774,13 +832,14 @@ maus_mov  subq.l    #8,sp               ** Mouse movement interrupt **
           move.l    MOUSE_VEC_MOV(a6),4(sp) ;place address of standard handler on the stack
           lea       wiabs,a6            in full-screen mode?
           cmp       rec_adr,a6
-          bne.s     maus_mo1 
+          bne.s     maus_mo1
           move.l    (sp),a6             yes -> do not invoke standard handler
           addq.l    #8,sp
           rts
 maus_mo1  move.l    (sp)+,a6            restore A6
           rts                           ;jump via RTS so that no register is needed
           ;
+*-----------------------------------------------------------------------------
 save_scr  move.w    wi_count,d0         ** Release screen buffer **
           beq       exec_rts
           tst.b     UNDO_STATE(a6)
@@ -795,6 +854,7 @@ save_sc1  clr.w     UNDO_STATE(a6)      buffer free & move done
           moveq.l   #MEN_IT_UNDO,d0     disable "undo" menu entry
           bra       men_idis
           ;
+*-----------------------------------------------------------------------------
 swap_buf  move.l    bildbuff,a1         ** Swap content of buffers **
           move.l    rec_adr,a0
           move.l    BILD_ADR(a0),a0
@@ -808,51 +868,14 @@ swap_bu1  move.l    (a0),d0
           dbra      d1,swap_bu1
           rts
           ;
-fram_del  tst.w     SEL_STATE(a6)       ** Stop selection **
-          beq       exec_rts
-          move.l    menu_adr,a0
-          bclr.b    #3,MEN_IT_SEL_PAST*RSC_OBJ_SZ+11(a0) ;enable "paste"
-          add.w     #MEN_IT_SEL_PAST*RSC_OBJ_SZ+11,a0
-          moveq.l   #10,d0
-fram_de1  bset.b    #3,(a0)             disable menu entries
-          add.w     #RSC_OBJ_SZ,a0
-          dbra      d0,fram_de1
-          move.l    rec_adr,a0          store old frame coord.
-          move.l    SEL_FRM_X1Y1(a6),UNDO_SEL_X1Y1(a6)
-          move.l    SEL_FRM_X2Y2(a6),UNDO_SEL_X2Y2(a6)
-          move.l    BILD_ADR(a0),UNDO_BUF_ADDR(a6)
-          move.w    #$ff00,SEL_FLAG_PASTABLE(a6)   ;set flag "old frame exists"
-          tst.b     SEL_STATE(a6)       is frame drawn?
-          beq.s     fram_de3
-          movem.l   a1-a4/d2-d7,-(sp)
-          bsr       get_top             toplevel window up-to-date?
-          bne.s     fram_de2
-          bsr       fram_drw            yes -> delete frame
-          movem.l   (sp)+,a1-a4/d2-d7
-fram_de3  clr.w     SEL_STATE(a6)
-          move.l    #-1,SEL_FRM_X2Y2(a6)  ;(for "undo")
-          rts
-fram_de2  clr.w     SEL_STATE(a6)       no
-          move.l    #-1,SEL_FRM_X2Y2(a6)
-          move.w    EV_MSG_BUF+6(a6),-(sp)
-          bsr       win_rdw             -> redraw image
-          move.w    (sp)+,EV_MSG_BUF+6(a6)
-          movem.l   (sp)+,a1-a4/d2-d7
-          rts
-          ;
-fram_mod  ;                             ** Selection content modified **
-          move.l    SEL_FRM_X1Y1(a6),UNDO_SEL_X1Y1(a6)
-          move.l    SEL_FRM_X2Y2(a6),UNDO_SEL_X2Y2(a6)
-          move.l    BILD_ADR(a0),UNDO_BUF_ADDR(a6)
-          rts
-          ;
+*-----------------------------------------------------------------------------
 sizedsub  move.l    d3,FENSTER+4(a4)    ** Set window size **
           move.w    d3,d1               +++ vert. slider +++
           mulu.w    #5,d1
           lsr.w     #1,d1               slider size
           move.w    d1,SCHIEBER+6(a4)
           moveq.l   #16,d0
-          bsr       set_xx
+          bsr       set_xx              ;wind_set WF_VSLSIZE
           move.w    #400,d0             slider pos
           sub.w     FENSTER+6(a4),d0
           move.w    FENSTER+2(a4),d1
@@ -890,6 +913,7 @@ sized1    swap      d3                  +++ hor. slider +++
           sub.w     d3,YX_OFF+2(a4)
           rts
           ;
+*-----------------------------------------------------------------------------
 movedsub  move.w    YX_OFF(a4),d1       ** Set window position **
           add.w     FENSTER+2(a4),d1    D1: new Y-offset
           sub.w     d3,d1
@@ -903,6 +927,7 @@ movedsub  move.w    YX_OFF(a4),d1       ** Set window position **
           move.l    d1,YX_OFF(a4)
           rts
           ;
+*-----------------------------------------------------------------------------
 aescall   move.l    a6,d1
           add.l     #AESPB,d1
           move.l    #$c8,d0
