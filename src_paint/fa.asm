@@ -37,7 +37,7 @@
  ;
  XDEF  aescall,vdicall
  XDEF  bildbuff,wi1,rec_adr,win_rdw,show_m,hide_m
- XDEF  save_scr,set_xx,rsrc_gad,vslidrw,wi_count,logbase
+ XDEF  save_scr,aes_win_set,aes_rsrc_gad,vslidrw,wi_count,logbase
  XDEF  copy_blk,rand_tab,menu_adr
 
 *-----------------------------------------------------------------------------
@@ -129,7 +129,7 @@
           move.w    INTOUT(a6),d0
           beq       main_rcs_err
           moveq.l   #RSC_MENU,d1        Get address of menu object tree
-          bsr       rsrc_gad
+          bsr       aes_rsrc_gad
           lea       menu_adr,a0
           move.l    ADDROUT(a6),(a0)
           bsr       init_itemslct       initialize item selector dialog
@@ -140,7 +140,7 @@
           move.l    d0,(a0)
           bsr       hide_m              ;hide_mouse
           moveq.l   #RSC_DESKTOP,d1
-          bsr       rsrc_gad
+          bsr       aes_rsrc_gad
           move.l    ADDROUT(a6),a3
           aes       104 2 5 0 0 0 4     ;wind_get
           move.l    INTOUT+2(a6),16(a3)
@@ -314,11 +314,11 @@ redraw6   cmp.w     d0,d1               no intersection?
           cmp.w     d0,d1
           blo.s     redraw7
           move.l    d0,d2
-          add.w     YX_OFF(a3),d0
-          add.w     YX_OFF(a3),d1
-          add.l     YX_OFF+2(a3),d0
-          add.l     YX_OFF+2(a3),d1
-          move.l    BILD_ADR(a3),a0
+          add.w     WIN_ROOT_YX(a3),d0
+          add.w     WIN_ROOT_YX(a3),d1
+          add.l     WIN_ROOT_YX+2(a3),d0
+          add.l     WIN_ROOT_YX+2(a3),d1
+          move.l    WIN_IMGBUF_ADDR(a3),a0
           move.l    logbase,a1
           movem.l   d4-d7,-(sp)
           movem.l   a3/d0-d2,-(sp)
@@ -328,16 +328,16 @@ redraw6   cmp.w     d0,d1               no intersection?
           beq.s     redraw10
           cmp.l     rec_adr,a3
           bne.s     redraw10
-          move.l    FENSTER(a3),-(sp)
-          move.l    FENSTER+4(a3),-(sp)
-          move.l    d2,FENSTER(a3)
+          move.l    WIN_CUR_XY(a3),-(sp)
+          move.l    WIN_CUR_WH(a3),-(sp)
+          move.l    d2,WIN_CUR_XY(a3)
           sub.l     d0,d1
           add.l     #$10001,d1
-          move.l    d1,FENSTER+4(a3)
+          move.l    d1,WIN_CUR_WH(a3)
           bsr       fram_drw            -> redraw frame
           move.l    rec_adr,a3
-          move.l    (sp)+,FENSTER+4(a3)
-          move.l    (sp)+,FENSTER(a3)
+          move.l    (sp)+,WIN_CUR_WH(a3)
+          move.l    (sp)+,WIN_CUR_XY(a3)
 redraw10  movem.l   (sp)+,d4-d7
 redraw7   moveq.l   #12,d3
           bra       getreck
@@ -365,19 +365,19 @@ topped1   cmp.w     WIN_HNDL(a4),d3     search matching window record
           rts
 topped2   lea       wi1,a0              references to this record...
           moveq.l   #WIN_STRUCT_CNT-1,d0
-topped3   cmp.b     LASTNUM(a0),d3
+topped3   cmp.b     WIN_PREV_HNDL(a0),d3
           bne.s     topped4
-          move.b    LASTNUM(a4),LASTNUM(a0)   ...replace
+          move.b    WIN_PREV_HNDL(a4),WIN_PREV_HNDL(a0)   ...replace
 topped4   add.w     #WIN_STRUCT_SZ,a0
           dbra      d0,topped3
-          move.b    d2,LASTNUM(a4)
+          move.b    d2,WIN_PREV_HNDL(a4)
           bsr       fram_del
           lea       rec_adr,a0
           move.l    a4,(a0)             store address of new active window
           bsr       prep_men            set state of "Save" menu entry
 topped5   move.w    d3,d1
           moveq.l   #10,d0
-          bra       set_xx              ;wind_set WF_TOP
+          bra       aes_win_set         ;wind_set WF_TOP
 
 *-----------------------------------------------------------------------------
 * The following function handle mouse clicks into the scrolling controls
@@ -387,36 +387,36 @@ topped5   move.w    d3,d1
 hslid     clr.l     d1                  --- horizontal slider ---
           move.w    EV_MSG_BUF+8(a6),d1
           move.w    #640,d0
-          sub.w     FENSTER+4(a4),d0
+          sub.w     WIN_CUR_WH(a4),d0
           mulu      d0,d1
           bsr       divu1000            D1:=D1/1000
-          sub.w     FENSTER(a4),d1
-          move.w    d1,YX_OFF+2(a4)
+          sub.w     WIN_CUR_XY(a4),d1
+          move.w    d1,WIN_ROOT_YX+2(a4)
           move.w    EV_MSG_BUF+8(a6),d1
-          move.w    d1,SCHIEBER(a4)
+          move.w    d1,WIN_HSLIDER_OFF(a4)
           moveq.l   #8,d0
-          bsr       set_xx              ;wind_set WF_HSLIDE: update slider pos.
+          bsr       aes_win_set         ;wind_set WF_HSLIDE: update slider pos.
           bra.s     vslidrw
           ;
 vslid     clr.l     d1                  --- vertical slider ---
           move.w    EV_MSG_BUF+8(a6),d1
           move.w    #400,d0
-          sub.w     FENSTER+6(a4),d0
+          sub.w     WIN_CUR_XY+6(a4),d0
           mulu      d0,d1
           bsr       divu1000            D1:=D1/1000
-          sub.w     FENSTER+2(a4),d1
-          move.w    d1,YX_OFF(a4)
+          sub.w     WIN_CUR_XY+2(a4),d1
+          move.w    d1,WIN_ROOT_YX(a4)
           lsl.w     #4,d1
           moveq.l   #25,d0
           bsr       divu_d0
           move.w    EV_MSG_BUF+8(a6),d1
-          move.w    d1,SCHIEBER+2(a4)
+          move.w    d1,WIN_VSLIDER_OFF(a4)
           moveq.l   #9,d0               ;wind_set WF_VSLIDE: update slider pos.
-          bsr       set_xx
+          bsr       aes_win_set
 vslidrw   bsr       hide_m              ** Top-Window neuzeichnen **
           move.l    rec_adr,a0
-          move.l    FENSTER(a0),d0
-          move.l    FENSTER+4(a0),d1
+          move.l    WIN_CUR_XY(a0),d0
+          move.l    WIN_CUR_WH(a0),d1
           move.l    d0,d2
           add.l     d0,d1
           sub.l     #$10001,d1
@@ -432,11 +432,11 @@ vslidrw1  cmp.l     #$2800000,d1
           swap      d1
           move.w    #639,d1
           swap      d1
-vslidrw2  add.l     YX_OFF+2(a0),d0
-          add.w     YX_OFF(a0),d0
-          add.l     YX_OFF+2(a0),d1
-          add.w     YX_OFF(a0),d1
-          move.l    BILD_ADR(a0),a0
+vslidrw2  add.l     WIN_ROOT_YX+2(a0),d0
+          add.w     WIN_ROOT_YX(a0),d0
+          add.l     WIN_ROOT_YX+2(a0),d1
+          add.w     WIN_ROOT_YX(a0),d1
+          move.l    WIN_IMGBUF_ADDR(a0),a0
           move.l    logbase,a1
           bsr       copy_blk
           tst.w     SEL_STATE(a6)
@@ -445,14 +445,14 @@ vslidrw2  add.l     YX_OFF+2(a0),d0
 vslidrw3  bra       show_m
           ;
 arrowed   move.l    #400,d2             D2: max. Y-Offset
-          sub.w     FENSTER+6(a4),d2
+          sub.w     WIN_CUR_XY+6(a4),d2
           move.w    EV_MSG_BUF+8(a6),d0   --- Scrollbar or scrolling arrows ---
           cmp.b     #3,d0
           bne.s     arrowed1
-          move.w    YX_OFF(a4),d1       -- scroll up by one pixel --
-          add.w     FENSTER+2(a4),d1
+          move.w    WIN_ROOT_YX(a4),d1    -- scroll up by one pixel --
+          add.w     WIN_CUR_XY+2(a4),d1
           beq       exec_rts
-          subq.w    #1,YX_OFF(a4)
+          subq.w    #1,WIN_ROOT_YX(a4)
           subq.w    #1,d1
 arrowedA  mulu      #1000,d1
           cmp.l     d2,d1
@@ -461,46 +461,46 @@ arrowedA  mulu      #1000,d1
           bra.s     arrowedC
 arrowedB  divu      d2,d1
 arrowedC  moveq.l   #9,d0
-          move.w    d1,SCHIEBER+2(a4)
-          bsr       set_xx              ;wind_set WF_VSLIDE: update slider pos.
+          move.w    d1,WIN_VSLIDER_OFF(a4)
+          bsr       aes_win_set         ;wind_set WF_VSLIDE: update slider pos.
           bra       vslidrw
 arrowed1  cmp.b     #2,d0
           bne.s     arrowed2
-          move.w    YX_OFF(a4),d1       -- scroll down by one pixel --
-          add.w     FENSTER+2(a4),d1
+          move.w    WIN_ROOT_YX(a4),d1    -- scroll down by one pixel --
+          add.w     WIN_CUR_XY+2(a4),d1
           cmp.w     d2,d1
           bhs       exec_rts
-          addq.w    #1,YX_OFF(a4)
+          addq.w    #1,WIN_ROOT_YX(a4)
           addq.w    #1,d1
           bra       arrowedA
 arrowed2  tst.b     d0
           bne.s     arrowed3
           clr.w     d1                  -- scroll to the top --
-          sub.w     FENSTER+2(a4),d1
-          move.w    d1,YX_OFF(a4)
+          sub.w     WIN_CUR_XY+2(a4),d1
+          move.w    d1,WIN_ROOT_YX(a4)
           clr.w     d1
-          clr.w     SCHIEBER+2(a4)
+          clr.w     WIN_VSLIDER_OFF(a4)
           moveq.l   #9,d0
-          bsr       set_xx
+          bsr       aes_win_set
           bra       vslidrw
 arrowed3  cmp.b     #1,d0
           bne.s     arrowed4
           move.w    d2,d1               -- scroll to the bottom --
-          sub.w     FENSTER+2(a4),d1
-          move.w    d1,YX_OFF(a4)
+          sub.w     WIN_CUR_XY+2(a4),d1
+          move.w    d1,WIN_ROOT_YX(a4)
           move.w    #1000,d1
-          move.w    #1000,SCHIEBER+2(a4)
+          move.w    #1000,WIN_VSLIDER_OFF(a4)
           moveq.l   #9,d0
-          bsr       set_xx
+          bsr       aes_win_set
           bra       vslidrw
 arrowed4  move.l    #640,d2             D2: max. X-Offset
-          sub.w     FENSTER+4(a4),d2
+          sub.w     WIN_CUR_WH(a4),d2
           cmp.b     #7,d0
           bne.s     arrowed5
-          move.w    YX_OFF+2(a4),d1     -- scroll 1 pixel to the left --
-          add.w     FENSTER(a4),d1
+          move.w    WIN_ROOT_YX+2(a4),d1   -- scroll 1 pixel to the left --
+          add.w     WIN_CUR_XY(a4),d1
           beq       exec_rts
-          subq.w    #1,YX_OFF+2(a4)
+          subq.w    #1,WIN_ROOT_YX+2(a4)
           subq.w    #1,d1
 arrowedD  mulu      #1000,d1
           cmp.l     d2,d1
@@ -509,37 +509,37 @@ arrowedD  mulu      #1000,d1
           bra.s     arrowedF
 arrowedE  divu      d2,d1
 arrowedF  moveq.l   #8,d0
-          move.w    d1,SCHIEBER(a4)
-          bsr       set_xx
+          move.w    d1,WIN_HSLIDER_OFF(a4)
+          bsr       aes_win_set
           bra       vslidrw
 arrowed5  cmp.b     #6,d0
           bne.s     arrowed6
-          move.w    YX_OFF+2(a4),d1     -- scroll 1 pixel to the right --
-          add.w     FENSTER(a4),d1
+          move.w    WIN_ROOT_YX+2(a4),d1   -- scroll 1 pixel to the right --
+          add.w     WIN_CUR_XY(a4),d1
           cmp.w     d2,d1
           bhs       exec_rts
-          addq.w    #1,YX_OFF+2(a4)
+          addq.w    #1,WIN_ROOT_YX+2(a4)
           addq.w    #1,d1
           bra       arrowedD
 arrowed6  cmp.b     #4,d0
           bne.s     arrowed7
           clr.w     d1                  -- scroll to left border --
-          sub.w     FENSTER(a4),d1
-          move.w    d1,YX_OFF+2(a4)
+          sub.w     WIN_CUR_XY(a4),d1
+          move.w    d1,WIN_ROOT_YX+2(a4)
           clr.w     d1
-          clr.w     SCHIEBER(a4)
+          clr.w     WIN_HSLIDER_OFF(a4)
           moveq.l   #8,d0
-          bsr       set_xx
+          bsr       aes_win_set
           bra       vslidrw
 arrowed7  cmp.b     #5,d0
           bne       exec_rts
           move.w    d2,d1               -- scroll to right border --
-          sub.w     FENSTER(a4),d1
-          move.w    d1,YX_OFF+2(a4)
+          sub.w     WIN_CUR_XY(a4),d1
+          move.w    d1,WIN_ROOT_YX+2(a4)
           move.w    #1000,d1
-          move.w    #1000,SCHIEBER(a4)
+          move.w    #1000,WIN_HSLIDER_OFF(a4)
           moveq.l   #8,d0
-          bsr       set_xx
+          bsr       aes_win_set
           bra       vslidrw
           ;
 *-----------------------------------------------------------------------------
@@ -560,19 +560,19 @@ moved     move.l    EV_MSG_BUF+8(a6),INTIN+4(a6)    --- Moving window ---
           move.l    INTOUT+2(a6),d3
           bra       movedsub
           ;
-fulled    move.l    FENSTER(a4),d0      --- Maximize window ---
-          move.l    FENSTER+4(a4),d1
+fulled    move.l    WIN_CUR_XY(a4),d0      --- Maximize window ---
+          move.l    WIN_CUR_WH(a4),d1
           cmp.l     maxwin,d0
           bne.s     fulled3
           cmp.l     maxwin+4,d1
           beq.s     fulled1
-fulled3   move.l    d0,LASTWIN(a4)      - maximum size -
-          move.l    d1,LASTWIN+4(a4)
+fulled3   move.l    d0,WIN_PREMAX_XY(a4)      - maximum size -
+          move.l    d1,WIN_PREMAX_WH(a4)
           move.l    maxwin,d3
           move.l    maxwin+4,d4
           bra.s     fulled2
-fulled1   move.l    LASTWIN(a4),d3      - de-maximize: back to previous window size -
-          move.l    LASTWIN+4(a4),d4
+fulled1   move.l    WIN_PREMAX_XY(a4),d3      - de-maximize: back to previous window size -
+          move.l    WIN_PREMAX_WH(a4),d4
 fulled2   move.l    d3,INTIN+4(a6)
           move.l    d4,INTIN+8(a6)
           aes       108 6 5 0 0 0 $fef   ;wind_calc
@@ -594,27 +594,27 @@ closed    bsr       wind_chg            --- Close window ---
           move.w    INTOUT(a6),d0
           cmp.w     #1,d0
           bne       exec_rts
-closed5   move.l    FENSTER(a4),d0
+closed5   move.l    WIN_CUR_XY(a4),d0
           move.l    d0,INTIN+8(a6)
           add.l     #$10001,d0
           move.l    d0,INTIN+0(a6)
           move.l    #$100010,INTIN+4(a6)
-          move.l    FENSTER+4(a4),INTIN+12(a6)
+          move.l    WIN_CUR_WH(a4),INTIN+12(a6)
           aes       74 8 1 0 0          ;graf_shrinkbox
           aes       102 1 1 0 0 !(a4)   ;wind_close
           aes       103 1 1 0 0 !(a4)   ;wind_delete
-          move.l    BILD_ADR(a4),-(sp)  ;mfree
+          move.l    WIN_IMGBUF_ADDR(a4),-(sp)  ;mfree
           move.w    #$49,-(sp)
           trap      #1
           addq.l    #6,sp
-          clr.b     INFO(a4)
+          clr.b     WIN_STATE_FLAGS(a4)
           moveq.l   #MEN_IT_UNDO,d0     disable "undo" menu entry
           bsr       men_idis
           clr.w     UNDO_STATE(a6)
           tst.w     SEL_STATE(a6)       selection ongoing?
           bne.s     closed7
           move.l    UNDO_BUF_ADDR(a6),d0      no; undo buffer refers to current window?
-          cmp.l     BILD_ADR(a4),d0
+          cmp.l     WIN_IMGBUF_ADDR(a4),d0
           bne.s     closed8
           clr.w     SEL_FLAG_PASTABLE(a6)    yes -> disable paste
           moveq.l   #MEN_IT_SEL_PAST,d0 ;disable "paste" menu entry
@@ -624,7 +624,7 @@ closed7   clr.b     SEL_STATE(a6)       delete selection frame (SEL_STATE:=$00ff
           bsr       fram_del
 closed8   move.w    #-1,(a4)            reset window handle
           clr.w     d2
-          move.b    LASTNUM(a4),d2
+          move.b    WIN_PREV_HNDL(a4),d2
           lea       wi_count,a0
           sub.w     #1,(a0)
           ble.s     closed2
@@ -672,11 +672,11 @@ absmod    move.l    rec_adr,a4          ** Switch into full-screen mode **
           add.w     #12,sp
           bsr       show_m
           move.l    a4,-(sp)            save address of window record
-          move.l    BILD_ADR(a4),a0
+          move.l    WIN_IMGBUF_ADDR(a4),a0
           lea       wiabs,a4            switch to dummy window record
           lea       rec_adr,a1
           move.l    a4,(a1)
-          move.l    bildbuff,BILD_ADR(a4)
+          move.l    bildbuff,WIN_IMGBUF_ADDR(a4)
           lea       bildbuff,a1
           move.l    a0,(a1)
 absmod2   tst.b     MOUSE_RBUT(a6)      busy loop until right mouse button is released
@@ -703,7 +703,7 @@ absmod4   bsr       hide_m              +++ Leaving full-screen mode +++
           add.w     #12,sp
           bsr       show_m
           lea       bildbuff,a1
-          move.l    BILD_ADR(a4),(a1)
+          move.l    WIN_IMGBUF_ADDR(a4),(a1)
           lea       rec_adr,a0
           move.l    (sp)+,a4
           move.l    a4,(a0)
@@ -712,8 +712,16 @@ absmod5   tst.b     MOUSE_RBUT(a6)      busy loop until right mouse button is re
           clr.w     MOUSE_RBUT(a6)
           bsr       win_rdw
           bra       evt_multi
+*---------------------------------------------------------------------
+* Query for full-screen mode
+* Result: status.EQ set if yes
+*
+is_absmode:
+          lea       wiabs,a0
+          cmp.l     rec_adr,a0
+          rts
 *--------------------------------------------------------SUB-FUNCTIONS
-hide_m    move.l    #$7b0000,CONTRL+0(a6)       hide_cursor
+hide_m    move.l    #$7b0000,CONTRL+0(a6)      hide_cursor
           clr.w     CONTRL+6(a6)
           bra       vdicall
           ;
@@ -722,29 +730,32 @@ show_m    move.l    #$7a0000,CONTRL+0(a6)      show_cursor
           move.w    #1,INTIN+0(a6)
           bra       vdicall
           ;
-set_xx    ;
+aes_win_set:
           aes       105 3 1 0 0 !WIN_HNDL(a4) !d0 !d1  ;wind_set
           rts
           ;
-rsrc_gad  clr.w     d0
+aes_rsrc_gad:
+          clr.w     d0                  default type = R_TREE
+aes_rsrc_gad_ext:
           aes       112 2 1 0 1 !d0 !d1 ;rsrc_gaddr
           rts
           ;
-get_top   move.l    rec_adr,a1          ** Return handle of top-level window **
+aes_get_top:                            ;** Return handle of top-level window **
           aes       104 2 5 0 0 !WIN_HNDL(a1) 10  ;wind_get: WF_TOP
           move.w    INTOUT+2(a6),d0     Retrieve handle of the top-most window
-          cmp.w     WIN_HNDL(a1),d0     compare with handle of active window
+          move.l    rec_adr,a0
+          cmp.w     WIN_HNDL(a0),d0     compare with handle of active window
           rts
           ;
-win_rdw   bsr       get_top             ** Redraw screen **
+win_rdw   bsr       aes_get_top         ** Redraw screen **
           beq       vslidrw             redraw top-level window
           lea       EV_MSG_BUF(a6),a0
           move.w    (a1),6(a0)
-          move.l    FENSTER(a1),8(a0)
-          move.l    FENSTER+4(a1),12(a0)
+          move.l    WIN_CUR_XY(a1),8(a0)
+          move.l    WIN_CUR_WH(a1),12(a0)
           bra       redraw              use redraw-procedure
           ;
-prep_men  move.l    BILD_ADR(a4),a0     ** Set State of "Save" menu entry **
+prep_men  move.l    WIN_IMGBUF_ADDR(a4),a0     ** Set State of "Save" menu entry **
           add.w     #32010,a0
           moveq.l   #MEN_IT_SAVE,d0     index of "save" menu entry
           tst.b     (a0)                window title set?
@@ -842,12 +853,12 @@ maus_mo1  move.l    (sp)+,a6            restore A6
 *-----------------------------------------------------------------------------
 save_scr  move.w    wi_count,d0         ** Release screen buffer **
           beq       exec_rts
-          tst.b     UNDO_STATE(a6)
+          tst.b     UNDO_STATE(a6)      drawing changed?
           beq       exec_rts
           move.l    rec_adr,a1
-          bclr.b    #3,INFO(a1)
+          bclr.b    #3,WIN_STATE_FLAGS(a1)   ;check and clear undo flag
           bne.s     save_sc1
-          bset.b    #1,INFO(a1)         is image modified?
+          bset.b    #1,WIN_STATE_FLAGS(a1)   ;not undone -> image modified
 save_sc1  clr.w     UNDO_STATE(a6)      buffer free & move done
           clr.b     SEL_TMP_OVERLAY(a6) short-overlay mode cleared
           clr.b     SEL_FLAG_DEL(a6)    do not delete old border
@@ -857,7 +868,7 @@ save_sc1  clr.w     UNDO_STATE(a6)      buffer free & move done
 *-----------------------------------------------------------------------------
 swap_buf  move.l    bildbuff,a1         ** Swap content of buffers **
           move.l    rec_adr,a0
-          move.l    BILD_ADR(a0),a0
+          move.l    WIN_IMGBUF_ADDR(a0),a0
           move.w    #3999,d1
 swap_bu1  move.l    (a0),d0
           move.l    (a1),(a0)+
@@ -869,62 +880,62 @@ swap_bu1  move.l    (a0),d0
           rts
           ;
 *-----------------------------------------------------------------------------
-sizedsub  move.l    d3,FENSTER+4(a4)    ** Set window size **
+sizedsub  move.l    d3,WIN_CUR_WH(a4)    ** Set window size **
           move.w    d3,d1               +++ vert. slider +++
           mulu.w    #5,d1
           lsr.w     #1,d1               slider size
-          move.w    d1,SCHIEBER+6(a4)
+          move.w    d1,WIN_VSLIDER_SZ(a4)
           moveq.l   #16,d0
-          bsr       set_xx              ;wind_set WF_VSLSIZE
+          bsr       aes_win_set         ;wind_set WF_VSLSIZE
           move.w    #400,d0             slider pos
-          sub.w     FENSTER+6(a4),d0
-          move.w    FENSTER+2(a4),d1
-          add.w     YX_OFF(a4),d1
+          sub.w     WIN_CUR_XY+6(a4),d0
+          move.w    WIN_CUR_XY+2(a4),d1
+          add.w     WIN_ROOT_YX(a4),d1
           mulu.w    #1000,d1
           bsr       divu_d0
-          move.w    d1,SCHIEBER+2(a4)
+          move.w    d1,WIN_VSLIDER_OFF(a4)
           moveq.l   #9,d0
-          bsr       set_xx
-          add.w     FENSTER+2(a4),d3    offset
-          add.w     YX_OFF(a4),d3
+          bsr       aes_win_set
+          add.w     WIN_CUR_XY+2(a4),d3    offset
+          add.w     WIN_ROOT_YX(a4),d3
           sub.w     #400,d3
           bls.s     sized1
-          sub.w     d3,YX_OFF(a4)
+          sub.w     d3,WIN_ROOT_YX(a4)
 sized1    swap      d3                  +++ hor. slider +++
           move.w    d3,d1
           mulu.w    #25,d1              slider size
           lsr.w     #4,d1
-          move.w    d1,SCHIEBER+4(a4)
+          move.w    d1,WIN_HSLIDER_SZ(a4)
           moveq.l   #15,d0
-          bsr       set_xx
+          bsr       aes_win_set
           move.w    #640,d0             slider pos
-          sub.w     FENSTER+4(a4),d0
-          move.w    FENSTER(a4),d1
-          add.w     YX_OFF+2(a4),d1
+          sub.w     WIN_CUR_WH(a4),d0
+          move.w    WIN_CUR_XY(a4),d1
+          add.w     WIN_ROOT_YX+2(a4),d1
           mulu.w    #1000,d1
           bsr       divu_d0
-          move.w    d1,SCHIEBER(a4)
+          move.w    d1,WIN_HSLIDER_OFF(a4)
           moveq.l   #8,d0
-          bsr       set_xx
-          add.w     FENSTER(a4),d3      offset
-          add.w     YX_OFF+2(a4),d3
+          bsr       aes_win_set
+          add.w     WIN_CUR_XY(a4),d3      offset
+          add.w     WIN_ROOT_YX+2(a4),d3
           sub.w     #640,d3
           bls       exec_rts
-          sub.w     d3,YX_OFF+2(a4)
+          sub.w     d3,WIN_ROOT_YX+2(a4)
           rts
           ;
 *-----------------------------------------------------------------------------
-movedsub  move.w    YX_OFF(a4),d1       ** Set window position **
-          add.w     FENSTER+2(a4),d1    D1: new Y-offset
+movedsub  move.w    WIN_ROOT_YX(a4),d1     ** Set window position **
+          add.w     WIN_CUR_XY+2(a4),d1    D1: new Y-offset
           sub.w     d3,d1
-          move.w    YX_OFF+2(a4),d2     D2: new X-offset
-          add.w     FENSTER(a4),d2
-          move.l    d3,FENSTER(a4)
+          move.w    WIN_ROOT_YX+2(a4),d2   D2: new X-offset
+          add.w     WIN_CUR_XY(a4),d2
+          move.l    d3,WIN_CUR_XY(a4)
           swap      d3
           sub.w     d3,d2
           swap      d1
           move.w    d2,d1
-          move.l    d1,YX_OFF(a4)
+          move.l    d1,WIN_ROOT_YX(a4)
           rts
           ;
 *-----------------------------------------------------------------------------

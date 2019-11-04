@@ -298,17 +298,17 @@ gummi1    bsr       show_m
 radier    move.b    frradier+33,d0      *** Shape: Eraser ***
           bne.s     radier3
           bsr       clip_on             -- normal mode --
-          vdi       32 0 1 1
-          vdi       23 0 1 1
-          vdi       25 0 1 0
+          vdi       32 0 1 1            ;set writing mode: replace
+          vdi       23 0 1 1            ;fill pattern type: opaque
+          vdi       25 0 1 0            ;fill color: 0
           bra.s     radier4
 radier3   lea       chooset,a3          -- pattern mode --
-          move.w    (a3),d6
+          move.w    (a3),d6             D6/D7: backup shape fill configuration
           move.w    4(a3),d7
-          move.w    #-1,(a3)
-          clr.w     4(a3)
+          move.w    #-1,(a3)            temporarily enable fill & rounded corner (actually unused)
+          clr.w     4(a3)               temporarily disable border
           bsr       set_attr
-          move.w    d6,(a3)
+          move.w    d6,(a3)             restore config.
           move.w    d7,4(a3)
 radier4   move.w    frradier+6,d5       X-offset
           move.w    d5,d7

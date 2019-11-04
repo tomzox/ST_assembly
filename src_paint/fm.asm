@@ -32,7 +32,7 @@
  ;
  XREF  aescall,vdicall,stack
  XREF  bildbuff,wi1,wi_count,rec_adr,menu_adr,win_xy
- XREF  last_koo,rsrc_gad,save_scr,set_xx,win_rdw,form_wrt
+ XREF  last_koo,aes_rsrc_gad,save_scr,aes_win_set,win_rdw,form_wrt
  XREF  form_do,form_del,form_buf
  XREF  frinfobo,frkoordi,frdrucke,frdatei,koanztab,choofig
  XREF  init_ted,copy_blk,maus_neu,maus_bne,fram_ins,fram_del
@@ -91,10 +91,10 @@ evt_menu_file:
 *-----------------------------------------------------------------------------
 evt_menu_file_quit:
           bsr       wind_chg            --- Command: Quit ---
-          bne.s     quitapp3
+          bne.s     quitapp3            top-level image modified?
           moveq.l   #WIN_STRUCT_CNT-1,d0
           lea       wi1,a0
-quitapp2  btst.b    #1,INFO(a0)         any image modified?
+quitapp2  btst.b    #1,WIN_STATE_FLAGS(a0)  ;any other image modified?
           bne.s     quitapp3
           add.l     #WIN_STRUCT_SZ,a0
           dbra      d0,quitapp2
@@ -131,23 +131,23 @@ new1      bsr       fram_del
           moveq.l   #MEN_IT_SAVE,d0     disable "save"
           bsr       men_idis
           move.l    UNDO_BUF_ADDR(a6),d0
-          cmp.l     BILD_ADR(a4),d0
+          cmp.l     WIN_IMGBUF_ADDR(a4),d0
           bne.s     new4
           moveq.l   #MEN_IT_SEL_PAST,d0 ;disable "paste (selection)"
           bsr       men_idis
           clr.w     SEL_FLAG_PASTABLE(a6)
 new4      clr.w     SEL_STATE(a6)
-          move.b    #1,INFO(a4)         only open-flag set
+          move.b    #1,WIN_STATE_FLAGS(a4)  ;only open-flag set
           clr.w     UNDO_STATE(a6)
           move.w    #3999,d0
-          move.l    BILD_ADR(a4),a0
+          move.l    WIN_IMGBUF_ADDR(a4),a0
 new2      clr.l     (a0)+               clear window buffer
           clr.l     (a0)+
           dbra      d0,new2
-          move.l    BILD_ADR(a4),a0     clear window title
+          move.l    WIN_IMGBUF_ADDR(a4),a0  ;clear window title
           add.w     #32010,a0
           clr.w     (a0)
-          bsr       name_xx
+          bsr       aes_win_set_title
           bra       win_rdw
           ;
 *-----------------------------------------------------------------------------
@@ -187,7 +187,7 @@ open2     moveq.l   #1,d0
 open1     moveq.l   #WIN_STRUCT_CNT-1,d0   search for free window record...
           move.l    a4,a0
           lea       wi1,a4
-open3     btst.b    #0,INFO(a4)
+open3     btst.b    #0,WIN_STATE_FLAGS(a4)
           beq.s     open4
           add.w     #WIN_STRUCT_SZ,a4
           dbra      d0,open3
@@ -199,11 +199,11 @@ open4     movem.l   a0/d1,-(sp)
           trap      #1
           addq.l    #6,sp
           movem.l   (sp)+,a0/d1
-          move.l    d0,BILD_ADR(a4)
+          move.l    d0,WIN_IMGBUF_ADDR(a4)
           bmi       open12              malloc failed?
           move.w    d1,WIN_HNDL(a4)     initialize window record
-          move.b    #1,INFO(a4)         initialze window state flags: open,unmodified
-          move.b    1(a0),LASTNUM(a4)
+          move.b    #1,WIN_STATE_FLAGS(a4)  ;initialze window state flags: open,unmodified
+          move.b    1(a0),WIN_PREV_HNDL(a4)
           move.l    d0,a0               clear window buffer
           move.w    #1999,d0
 open6     clr.l     (a0)+
@@ -234,28 +234,28 @@ open8     bset.b    #3,(a3)
           dbra      d0,open8
 open7     moveq.l   #8,d0               slider: position 0
           clr.w     d1
-          bsr       set_xx
+          bsr       aes_win_set
           moveq.l   #9,d0
           clr.w     d1
-          bsr       set_xx
-          clr.l     SCHIEBER(a4)
+          bsr       aes_win_set
+          clr.l     WIN_HSLIDER_OFF(a4)
           moveq.l   #15,d0              previous size
-          move.w    SCHIEBER+4(a4),d1
-          bsr       set_xx
+          move.w    WIN_HSLIDER_SZ(a4),d1
+          bsr       aes_win_set
           moveq.l   #16,d0
-          move.w    SCHIEBER+6(a4),d1
-          bsr       set_xx
-          move.l    FENSTER(a4),INTIN+8(a6)   ;graf_growbox
-          move.l    FENSTER+4(a4),INTIN+12(a6)
-          move.l    FENSTER(a4),INTIN+0(a6)
+          move.w    WIN_VSLIDER_SZ(a4),d1
+          bsr       aes_win_set
+          move.l    WIN_CUR_XY(a4),INTIN+8(a6)   ;graf_growbox
+          move.l    WIN_CUR_WH(a4),INTIN+12(a6)
+          move.l    WIN_CUR_XY(a4),INTIN+0(a6)
           move.l    #$100010,INTIN+4(a6)
           aes       73 8 1 0 0
-          move.l    BILD_ADR(a4),a0     set window title
+          move.l    WIN_IMGBUF_ADDR(a4),a0  ;set window title
           add.w     #32010,a0
           clr.w     (a0)
-          bsr       name_xx
-          move.l    FENSTER(a4),INTIN+4(a6)
-          move.l    FENSTER+4(a4),INTIN+8(a6)
+          bsr       aes_win_set_title
+          move.l    WIN_CUR_XY(a4),INTIN+4(a6)
+          move.l    WIN_CUR_WH(a4),INTIN+8(a6)
           aes       108 6 5 0 0 0 $fef  ;wind_calc
           move.l    INTOUT+2(a6),INTIN+2(a6)
           move.l    INTOUT+6(a6),INTIN+6(a6)
@@ -283,7 +283,7 @@ evt_menu_file_load:
           bmi       tos_err
           move.b    frdatei+33,d1       D1: format
           bne.s     load2               +++ Format RAW +++
-          move.l    bildbuff,a2         A2: address of buffer
+          move.l    bildbuff,a2         A2: address of (temporary) buffer
           move.l    a2,a0
           move.w    #1999,d0
 load7     clr.l     (a0)+               clear image buffer
@@ -312,7 +312,7 @@ load12    subq.w    #1,d0
           moveq.l   #80,d2
           sub.w     d3,d2
           subq.w    #1,d3
-          move.l    BILD_ADR(a4),a0
+          move.l    WIN_IMGBUF_ADDR(a4),a0
           move.l    bildbuff,a2
 load5     move.w    d3,d1               copy image data into buffer
 load6     move.b    (a2)+,(a0)+
@@ -336,7 +336,7 @@ load2     cmp.b     #1,d1
           addq.l    #6,sp
           bsr       load_opn
           bsr       maus_bne            switch mouse form to "bee"
-          move.l    BILD_ADR(a4),a2
+          move.l    WIN_IMGBUF_ADDR(a4),a2
           move.l    #32000,d2           load image
           bsr       load_red
           bra.s     load3
@@ -368,7 +368,7 @@ load11    move.w    8(a2),d4            D4: height
           bsr.s     load_opn            open window
           move.w    d4,d0
           bra       load12
-load3     bset.b    #2,INFO(a4)         set "virgin" flag
+load3     bset.b    #2,WIN_STATE_FLAGS(a4)  ;set "virgin" flag
           clr.l     d3
 load9     move.w    handle,-(sp)        ++ close ++
           move.w    #$3e,-(sp)
@@ -395,13 +395,13 @@ load_bad  lea       stralbad,a0         ++ format error ++
           ;
 load_opn  bsr       wind_chg            ++ prepare window ++
           bne.s     load_op2
-          btst.b    #0,INFO(a4)         a window already open?
+          btst.b    #0,WIN_STATE_FLAGS(a4)  ;a window already open?
           beq.s     load_op2
-          btst.b    #2,INFO(a4)         virgin?
+          btst.b    #2,WIN_STATE_FLAGS(a4)  ;virgin?
           bne.s     load_op2
           tst.w     SEL_STATE(a6)       selection ongoing?
           beq       set_name            no -> use already open window
-load_op2  bsr       open_ld
+load_op2  bsr       open_ld             open new window
           tst.b     d0                  error?
           beq       set_name
           addq.l    #4,sp
@@ -412,9 +412,9 @@ load_op2  bsr       open_ld
 evt_menu_file_undo:
           tst.b     UNDO_STATE(a6)      --- Command: Undo ---
           beq       evt_menu_rts
-          btst.b    #1,INFO(a4)         single modification only so far?
-          bne.s     regen8
-          bchg.b    #3,INFO(a4)         yes -> reset modification flag
+          btst.b    #1,WIN_STATE_FLAGS(a4)  ;at most one modification so far?
+          bne.s     regen8                  ;(note "modified" flag is set before 2nd drawing op.)
+          bchg.b    #3,WIN_STATE_FLAGS(a4)  ;yes -> toggle undo flag
 regen8    tst.w     SEL_STATE(a6)
           beq       regen10
           tst.b     SEL_OPT_OVERLAY(a6)
@@ -425,7 +425,7 @@ regen8    tst.w     SEL_STATE(a6)
           bne       regen10
 regen11   move.w    #3999,d0            background
           move.l    SEL_OV_BUF(a6),a0
-          move.l    BILD_ADR(a4),a1
+          move.l    WIN_IMGBUF_ADDR(a4),a1
 regen12   move.l    (a0)+,(a1)+
           move.l    (a0)+,(a1)+
           dbra      d0,regen12
@@ -467,7 +467,7 @@ regen14   move.l    SEL_PREV_X1Y1(a6),d0
           move.l    SEL_PREV_X2Y2(a6),28(a3)
           add.l     SEL_PREV_OFFSET(a6),d0
           move.l    d0,24(a3)
-regen13   move.l    BILD_ADR(a4),a1
+regen13   move.l    WIN_IMGBUF_ADDR(a4),a1
           move.l    bildbuff,20(a3)
           lea       win_xy,a0
           clr.l     (a0)+
@@ -478,7 +478,7 @@ regen13   move.l    BILD_ADR(a4),a1
           bra       win_rdw
           ;
 regen10   move.l    bildbuff,a0         ++ NORM-Mode ++
-          move.l    BILD_ADR(a4),a1
+          move.l    WIN_IMGBUF_ADDR(a4),a1
           move.w    #3999,d1            swap images
 regen1    move.l    (a0),d0
           move.l    (a1),(a0)+
@@ -502,7 +502,7 @@ regen1    move.l    (a0),d0
           bset.b    #3,MEN_IT_SEL_PAST*RSC_OBJ_SZ+11(a2)  ;disable "discard" menu entry
           cmp.l     #$12345678,UNDO_BUF_ADDR(a6) ;is pasting allowed?
           beq.s     regen7
-          move.l    BILD_ADR(a4),UNDO_BUF_ADDR(a6) ;yes
+          move.l    WIN_IMGBUF_ADDR(a4),UNDO_BUF_ADDR(a6) ;yes
           move.w    #$ff00,SEL_FLAG_PASTABLE(a6)
           moveq.l   #MEN_IT_SEL_PAST,d0 ;enable "paste (selection)" menu entry
           bsr       men_iena
@@ -553,10 +553,10 @@ druck4    lea       form_buf,a5         calc clipping-rectangle
           bra.s     druck20
 druck21   cmp.b     #1,d0
           bne.s     druck22
-          move.l    FENSTER(a4),d0      window
-          move.l    FENSTER+4(a4),d1
-          add.w     YX_OFF(a4),d0
-          add.l     YX_OFF+2(a4),d0
+          move.l    WIN_CUR_XY(a4),d0      window
+          move.l    WIN_CUR_WH(a4),d1
+          add.w     WIN_ROOT_YX(a4),d0
+          add.l     WIN_ROOT_YX+2(a4),d0
           add.l     d0,d1
           sub.l     #$10001,d1
           move.l    d0,(a5)
@@ -570,7 +570,7 @@ druck22   moveq.l   #3,d2               ask for coordinates
           move.l    last_koo+4,4(a5)
 druck20   bsr       maus_bne
           lea       form_buf,a5
-          move.l    BILD_ADR(a4),a6     ATTN local redefinition of A6
+          move.l    WIN_IMGBUF_ADDR(a4),a6  ;ATTN local redefinition of A6
           lea       escfeed,a2          printing line delta = 1/8 inch
           bsr       prtout
           move.b    frdrucke+5,d0       Portrait or landscape format?
@@ -738,7 +738,7 @@ evt_menu_file_save:
           move.b    frdatei+35,d0       +++ Format RAW +++
           bne.s     save4
           move.l    #32000,d7           Total
-          move.l    BILD_ADR(a4),a3
+          move.l    WIN_IMGBUF_ADDR(a4),a3
 save_all  clr.l     d6
           bsr       save_opn
           bsr       maus_bne
@@ -754,10 +754,10 @@ save4     cmp.b     #2,d0
           move.l    (a1),d4
           move.l    4(a1),d5
           bra.s     save7
-save5     move.l    FENSTER(a4),d4      window
-          move.l    FENSTER+4(a4),d5
-          add.w     YX_OFF(a4),d4
-          add.l     YX_OFF+2(a4),d4
+save5     move.l    WIN_CUR_XY(a4),d4      window
+          move.l    WIN_CUR_WH(a4),d5
+          add.w     WIN_ROOT_YX(a4),d4
+          add.l     WIN_ROOT_YX+2(a4),d4
           add.l     d4,d5
           sub.l     #$10001,d5
 save7     move.l    d5,d2
@@ -786,7 +786,7 @@ save8     cmp.l     #$2800000,d2        width 640 pixels?
           blo.s     save10
           move.w    d2,d7               yes -> use function for complete save
           mulu.w    #80,d7
-          move.l    BILD_ADR(a4),a3
+          move.l    WIN_IMGBUF_ADDR(a4),a3
           mulu.w    #80,d4
           add.l     d4,a3
           bra       save_all
@@ -799,7 +799,7 @@ save10    lea       form_buf,a0         backup size
           move.l    d4,d0
           move.l    d5,d1
           clr.l     d2                  copy image data to buffer
-          move.l    BILD_ADR(a4),a0
+          move.l    WIN_IMGBUF_ADDR(a4),a0
           move.l    a3,a1               A3: scratch buffer
           bsr       copy_blk
           bsr       maus_bne            switch mouse form to "bee"
@@ -840,7 +840,7 @@ save_wrt  move.w    handle,-(sp)
           bpl.s     save1
           bsr       tos_err
           bra.s     save2
-save1     and.b     #%11110101,INFO(a4) window-save-Flag
+save1     and.b     #%11110101,WIN_STATE_FLAGS(a4)  ;window-save-Flag
 save2     move.w    handle,-(sp)        ;close
           move.w    #$3e,-(sp)
           trap      #1
@@ -848,7 +848,7 @@ save2     move.w    handle,-(sp)        ;close
           bsr       maus_neu            restore normal mouse form
           rts
           ;
-save_opn  move.l    BILD_ADR(a4),a0     +++ ask user for file name +++
+save_opn  move.l    WIN_IMGBUF_ADDR(a4),a0    ;+++ ask user for file name +++
           add.w     #32010,a0
           moveq.l   #-1,d3              D3: parameter for itemslct
           move.l    a0,a2
@@ -864,7 +864,7 @@ save_op5  move.b    (a2)+,(a0)+         copy file name part of full path/name
           move.w    EV_MSG_BUF+8(a6),d0  ;"Save" menu command? (i.e. not "Save as...")
           cmp.w     #MEN_IT_SAVE,d0
           bne.s     save_op7
-          move.l    BILD_ADR(a4),a2
+          move.l    WIN_IMGBUF_ADDR(a4),a2
           add.w     #32010,a2
           tst.b     (a2)                filename of current buffer already set?
           beq.s     save_op7
@@ -892,7 +892,7 @@ save_o10  clr.w     -(sp)               ;create
           bmi.s     save_op2
           lea       handle,a0
           move.w    d0,(a0)
-          move.l    BILD_ADR(a4),a0
+          move.l    WIN_IMGBUF_ADDR(a4),a0
           add.w     #32010,a0
           tst.b     (a0)                window title already set?
           beq       set_name
@@ -906,8 +906,8 @@ save3     cmp.b     #2,d0
           bne.s     save15
           lea       logo_buf,a3         +++ Format LOGO +++
           move.w    #1,(a3)
-          move.l    FENSTER(a4),2(a3)
-          move.l    FENSTER+4(a4),6(a3)
+          move.l    WIN_CUR_XY(a4),2(a3)
+          move.l    WIN_CUR_WH(a4),6(a3)
           move.w    2(a3),d0
           add.w     6(a3),d0
           sub.w     #640,d0
@@ -936,7 +936,7 @@ save17    move.w    #-1,-(sp)
           lea       stack,a0
           moveq.l   #34,d0
           bsr.s     save_dat            save header
-          move.l    BILD_ADR(a4),-(sp)
+          move.l    WIN_IMGBUF_ADDR(a4),-(sp)
           move.l    #32000,-(sp)        save image data
           bra       save_wrt
 save_dat  move.l    a0,-(sp)            +++ Save image data +++
@@ -986,12 +986,12 @@ koo_chk3  moveq.l   #MEN_IT_COORDS,d0   enable "coordinates"
           bra       men_iena
           ;
 *-----------------------------------------------------------------------------
-wind_chg  btst.b    #1,INFO(a4)         ** Image modified? **
-          bne.s     wind_ch1
-          tst.w     UNDO_STATE(a6)
+wind_chg  btst.b    #1,WIN_STATE_FLAGS(a4)   ;** Image modified? **
+          bne.s     wind_ch1                 ;more than one modification
+          tst.w     UNDO_STATE(a6)           ;modification in undo buffer?
           beq.s     wind_ch1
-          bchg.b    #3,INFO(a4)
-          bchg.b    #3,INFO(a4)
+          bchg.b    #3,WIN_STATE_FLAGS(a4)   ;change undone? (yes <=> bit is set)
+          bchg.b    #3,WIN_STATE_FLAGS(a4)   ;NOTE: double bchg == inverse of btst
 wind_ch1  rts
           ;
 *-----------------------------------------------------------------------------
@@ -1108,7 +1108,7 @@ itemsok   clr.b     d0                  D0 = 0 -> ok
           rts
           ;
 *-----------------------------------------------------------------------------
-set_name  move.l    BILD_ADR(a4),a0     ** Set window title **
+set_name  move.l    WIN_IMGBUF_ADDR(a4),a0     ** Set window title **
           add.w     #32010,a0
           lea       directory,a1
           move.l    a0,a2
@@ -1123,22 +1123,24 @@ set_nam2  move.l    a2,a0
           lea       filename,a1
 set_nam3  move.b    (a1)+,(a0)+         file name
           bne       set_nam3
-          move.l    BILD_ADR(a4),a0
+          move.l    WIN_IMGBUF_ADDR(a4),a0
           add.w     #32010,a0
           tst.b     (a0)
-          beq.s     name_xx
+          beq.s     aes_win_set_title
           move.l    a0,a2
           moveq.l   #MEN_IT_SAVE,d0     enable "save"
           bsr       men_iena
           move.l    a2,a0
-name_xx   move.l    a0,INTIN+4(a6)
+          ;
+aes_win_set_title:
+          move.l    a0,INTIN+4(a6)
           aes       105 4 1 0 0 !WIN_HNDL(a4) 2  ;wind_set: window title
           rts
           ;
 *-----------------------------------------------------------------------------
 get_koos  lea       frkoordi,a2         ** Ask for Coordinates **
           moveq.l   #RSC_FORM_COORD,d1
-          bsr       rsrc_gad
+          bsr       aes_rsrc_gad
           move.l    ADDROUT+0(a6),a3
           bsr       init_ted            write addresses into TED-record
           addq.l    #2,a2

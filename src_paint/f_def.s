@@ -93,21 +93,30 @@ UNDO_BUF_ADDR     equ  428  ; dc.l ; #$12345678 for undo of shape draw,
 DSECT_SZ          equ  432  ; total size of data section managed via A6
 
 ;-----------------------------------------------------------------------------
-;                  *** Offsets within window struct ("wi1") ***
+;                          *** Offsets within window struct ("wi1") ***
 
-WIN_HNDL  equ  0    ; window handle or -1 if window not open
-BILD_ADR  equ  2    ; Address of image buffer
-INFO      equ  6    ; 0:open/1:change/2:virgin/3:was already changed
-LASTNUM   equ  7    ; Handle of last active window
-LASTWIN   equ  8    ; Size before maximizing window
-YX_OFF    equ  16   ; Delta of window root to coord. root (X/Y=0/0)
-;         equ  20   ; unused - has to be zero (YX_OFF+2 is read from as long)
-FENSTER   equ  22   ; Position and size
-SCHIEBER  equ  30   ; Slider hor./vert.: position and size
+WIN_HNDL          equ  0    ; window handle or -1 if window not open
+WIN_IMGBUF_ADDR   equ  2    ; Address of image buffer
+WIN_STATE_FLAGS   equ  6    ; 0:open/1:modified (more than once)/2:non-virgin/3:undo flag while single modif.
+                            ; note to #1: first modification is noted via UNDO_STATE && !#3
+WIN_PREV_HNDL     equ  7    ; Handle of last active window
+WIN_PREMAX_XY     equ  8    ; X/Y pos before maximizing window
+WIN_PREMAX_WH     equ  12   ; W/H size before maximizing window
+WIN_ROOT_YX       equ  16   ; Delta of window root to coord. root (X/Y=0/0)
+;                 equ  20   ; unused - has to be zero (YX_OFF+2 is read from as long)
+WIN_CUR_XY        equ  22   ; Current window position (i.e. of window frame)
+WIN_CUR_WH        equ  26   ; Current window size
+WIN_HSLIDER_OFF   equ  30   ; horizontal slider position
+WIN_VSLIDER_OFF   equ  32   ; vertical slider position
+WIN_HSLIDER_SZ    equ  34   ; horizontal slider size
+WIN_VSLIDER_SZ    equ  36   ; vertical slider size
+
 WIN_STRUCT_SZ equ 38 ; size of this data struct
 WIN_STRUCT_CNT equ 7 ; number of window structs in array
-          ;
-          ;        *** Offsets within TEDINFO struct ***
+
+;-----------------------------------------------------------------------------
+;                  *** Offsets within TEDINFO struct ***
+
 TED_NR    equ  0    ; Index of TEDINFO struct
 TED_LEN   equ  2    ; length of string -1
 TED_VAL   equ  4    ; current, valid value

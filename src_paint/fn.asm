@@ -32,7 +32,7 @@
  ;
  XREF  aescall,vdicall
  XREF  bildbuff,rec_adr,menu_adr,koanztab
- XREF  show_m,hide_m,save_scr,win_rdw,rsrc_gad
+ XREF  show_m,hide_m,save_scr,win_rdw,aes_rsrc_gad
  XREF  save_buf,win_abs,copy_blk,win_xy,koos_mak,alertbox
  XREF  logbase,get_koos,over_que,fram_del,evt_menu_sel_pt2,koostr1
  ;
@@ -376,7 +376,7 @@ evt_menu_sel_era_blk_inv:
           bsr       over_old            -> Release combination mode
 white1    bsr       save_scr
           bsr       save_buf
-          move.l    BILD_ADR(a4),a0
+          move.l    WIN_IMGBUF_ADDR(a4),a0
           bsr       work_blk            execute raster operation
           move.w    #$ff00,UNDO_STATE(a6)
           bsr       fram_mod
@@ -472,7 +472,7 @@ einfug2   bsr       win_abs             calc window coords.
           move.l    UNDO_SEL_X2Y2(a6),d2
           sub.l     UNDO_SEL_X1Y1(a6),d2
           lea       win_xy+6,a2
-          lea       YX_OFF(a4),a3
+          lea       WIN_ROOT_YX(a4),a3
           bsr       cent_koo            center selection within the window
           move.w    #-1,SEL_STATE(a6)   initialize selection state struct
           move.l    d0,SEL_FRM_X1Y1(a6)
@@ -481,7 +481,7 @@ einfug2   bsr       win_abs             calc window coords.
           move.l    UNDO_SEL_X1Y1(a6),d0       copy selection content to the image
           move.l    UNDO_SEL_X2Y2(a6),d1
           move.l    UNDO_BUF_ADDR(a6),a0
-          move.l    BILD_ADR(a4),a1
+          move.l    WIN_IMGBUF_ADDR(a4),a1
           cmp.l     a0,a1
           bne.s     einfug3
           move.l    bildbuff,a0
@@ -550,7 +550,7 @@ werfweg3  clr.b     SEL_STATE(a6)
           clr.b     SEL_CUR_COMB(a6)
           move.w    #3999,d0
           move.l    SEL_OV_BUF(a6),a0
-          move.l    BILD_ADR(a4),a1
+          move.l    WIN_IMGBUF_ADDR(a4),a1
 werfweg1  move.l    (a0)+,(a1)+
           move.l    (a0)+,(a1)+
           dbra      d0,werfweg1
@@ -567,7 +567,7 @@ evt_menu_sel_commit:
           tst.b     SEL_OPT_OVERLAY(a6)
           beq       evt_menu_rts2
           moveq.l   #RSC_FORM_COMMIT,d1 ;+ Disable +
-          bsr       rsrc_gad
+          bsr       aes_rsrc_gad
           move.l    ADDROUT+0(a6),a3
           clr.w     82(a3)
           move.w    #8,106(a3)
@@ -797,7 +797,7 @@ over_old  move.b    SEL_OPT_OVERLAY(a6),d0  ;** undo combination **
 over_ol2  move.l    SEL_FRM_X1Y1(a6),d2
           move.l    bildbuff,a0
           move.l    rec_adr,a1
-          move.l    BILD_ADR(a1),a1
+          move.l    WIN_IMGBUF_ADDR(a1),a1
           bsr       copy_blk
           movem.l   (sp)+,d2-d7/a2-a3
 over_ol1  move.b    #-1,SEL_FLAG_CHG(a6)  ; modification done
@@ -829,7 +829,7 @@ over_al2  clr.b     SEL_OPT_OVERLAY(a6)
 *-----------------------------------------------------------------------------
 over_beg  move.w    #1999,d0            ** Prepare overlay mode **
           move.l    rec_adr,a0
-          move.l    BILD_ADR(a0),a0
+          move.l    WIN_IMGBUF_ADDR(a0),a0
           move.l    SEL_OV_BUF(a6),a1   copy original image to OV-buffer
 over_be1  move.l    (a0)+,(a1)+
           move.l    (a0)+,(a1)+
@@ -909,7 +909,7 @@ cent_ko3  subq.l    #2,a2               ++ end of loop ++
 form_do   bsr       maus_alt            ** Open dialog window **
           aes       107 1 1 0 0 1       ;wind_update
           move.w    d2,d1
-          bsr       rsrc_gad
+          bsr       aes_rsrc_gad
           move.l    ADDROUT+0(a6),a3    A3: address of object tree
           aes       54 0 5 1 0 !a3      ;form_center
           move.l    INTOUT+2(a6),d6
@@ -1219,9 +1219,9 @@ init_ted  tst.w     2(a2)               ** set TEDINFO addresses **
           bhi       evt_menu_rts2
           move.l    a2,-(sp)
           addq.l    #2,a2
-init_te1  moveq.l   #8,d0
+init_te1  moveq.l   #8,d0               type = R_TEPTEXT
           move.w    (a2),d1
-          bsr       rsrc_gad+2
+          bsr       aes_rsrc_gad_ext
           move.l    ADDROUT+0(a6),a0
           move.l    (a0),a0
           add.w     TED_ADR+2(a2),a0

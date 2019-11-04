@@ -83,7 +83,7 @@ evt_menu_sel_mirror:
           sub.w     SEL_FRM_X1Y1+2(a6),d7
           beq       evt_menu_rts3
           move.l    bildbuff,a0
-          move.l    BILD_ADR(a4),a1
+          move.l    WIN_IMGBUF_ADDR(a4),a1
           move.w    SEL_FRM_X1Y1+2(a6),d0
           mulu.w    #80,d0                   address
           add.l     d0,a0
@@ -149,7 +149,7 @@ spiver    move.w    SEL_FRM_X2Y2+0(a6),d1    -- mirror at vertical line --
           move.w    SEL_FRM_X1Y1+2(a6),d0
           sub.w     d0,d7
           move.l    bildbuff,a0
-          move.l    BILD_ADR(a4),a1
+          move.l    WIN_IMGBUF_ADDR(a4),a1
           mulu.w    #80,d0              Y start offset
           add.l     d0,a0
           add.l     d0,a1
@@ -247,7 +247,7 @@ spiver12  move.l    SEL_FRM_X1Y1(a6),d2    + shift +
           swap      d1
           move.w    SEL_FRM_X1Y1+2(a6),d0
           move.w    SEL_FRM_X2Y2+2(a6),d1
-          move.l    BILD_ADR(a4),a0
+          move.l    WIN_IMGBUF_ADDR(a4),a0
           move.l    a0,a1
           bsr       copy_blk
           move.w    (sp)+,d1            + fill gap +
@@ -258,7 +258,7 @@ spiver12  move.l    SEL_FRM_X1Y1(a6),d2    + shift +
           move.w    SEL_FRM_X2Y2+2(a6),d1
           move.l    d0,d2
           move.l    bildbuff,a0
-          move.l    BILD_ADR(a4),a1
+          move.l    WIN_IMGBUF_ADDR(a4),a1
           bsr       copy_blk
 spiver10  move.w    #$ff00,UNDO_STATE(a6) ;enable "undo"
           bsr       fram_mod
@@ -291,7 +291,7 @@ evt_menu_sel_rotate:
           add.w     #180,d0
           move.w    (a0,d0.w),d0
           move.l    bildbuff,a0
-          move.l    BILD_ADR(a4),a1
+          move.l    WIN_IMGBUF_ADDR(a4),a1
           lea       stack,a4
           bsr       rota_aus
           ;
@@ -410,7 +410,7 @@ zoom5     move.w    d1,SEL_FRM_X2Y2+2(a6)
 zoom7     move.w    d0,SEL_FRM_X2Y2+0(a6)
           sub.w     d2,d0
           move.l    rec_adr,a0
-          move.l    BILD_ADR(a0),a0
+          move.l    WIN_IMGBUF_ADDR(a0),a0
           move.l    bildbuff,a1
           move.w    d0,18(a4)
           move.w    d1,20(a4)
@@ -432,13 +432,13 @@ zoom35    move.l    UNDO_SEL_X1Y1(a6),d0
           move.l    d0,SEL_FRM_X1Y1(a6)
           move.l    d1,SEL_FRM_X2Y2(a6)
           clr.w     d3                  clear old rect. pos.
-          move.l    BILD_ADR(a4),a0
+          move.l    WIN_IMGBUF_ADDR(a4),a0
           bsr       work_bl2
           move.w    #-1,UNDO_STATE(a6) ;enable "undo"
           move.l    UNDO_SEL_X1Y1(a6),d0
           add.l     d0,UNDO_SEL_X2Y2(a6)
           move.l    bildbuff,a0         Zoom-parameter
-          move.l    BILD_ADR(a4),a1
+          move.l    WIN_IMGBUF_ADDR(a4),a1
           lea       stack,a4
           move.w    18(a4),d0
           move.w    20(a4),d1
@@ -470,7 +470,7 @@ evt_menu_sel_distort:
 zerr2     bsr       manu_mak            +++ wait loop +++
           bne.s     zerr1
           move.l    rec_adr,a0
-          move.l    BILD_ADR(a0),a0
+          move.l    WIN_IMGBUF_ADDR(a0),a0
           move.l    bildbuff,a1
           bsr       zerr_aus
           bra       zerr2
@@ -648,7 +648,7 @@ manu_pr1  clr.l     (a0)+
           move.l    UNDO_SEL_X1Y1(a6),d0       copy relection rect. onto screen
           move.l    UNDO_SEL_X2Y2(a6),d1
           move.l    SEL_FRM_X1Y1(a6),d2
-          move.l    BILD_ADR(a4),a0
+          move.l    WIN_IMGBUF_ADDR(a4),a0
           move.l    bildbuff,a1
           bsr       copy_blk
           lea       stack,a4            A4: address of data record
@@ -692,7 +692,7 @@ manu_en2  bsr       save_buf            save old image
           move.l    UNDO_SEL_X1Y1(a6),d0
           move.l    UNDO_SEL_X2Y2(a6),d1
           clr.w     d3                  lear old selection rect
-          move.l    BILD_ADR(a4),a0
+          move.l    WIN_IMGBUF_ADDR(a4),a0
           bra       work_bl2
           ;
 *-----------------------------------------------------------------------------

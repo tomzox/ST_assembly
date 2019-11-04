@@ -60,7 +60,7 @@
 *-----------------------------------------------------------------------------
           ;
 evt_butt  lea       win_xy,a0           WIN_XY: window coords.
-          move.l    YX_OFF(a4),8(a0)
+          move.l    WIN_ROOT_YX(a4),8(a0)
           clr.w     12(a0)
           bsr       win_abs
           move.l    MOUSE_ORIG_XY(a6),d0
@@ -84,7 +84,7 @@ evt_butt  lea       win_xy,a0           WIN_XY: window coords.
           bra.s     evt_but4
           ;
 evt_but5  move.l    UNDO_BUF_ADDR(a6),d0    ++ regular tool ++
-          cmp.l     BILD_ADR(a4),d0
+          cmp.l     WIN_IMGBUF_ADDR(a4),d0
           bne.s     evt_but4
           tst.w     SEL_FLAG_PASTABLE(a6)   ;disable "paste" flag
           beq.s     evt_but4
@@ -115,8 +115,8 @@ exit_beg  lea       last_koo,a1         + convert coordinates to absolute +
           move.w    8(a1),d2
           beq.s     exit1
           move.l    rec_adr,a0
-          move.w    YX_OFF+0(a0),d0
-          move.w    YX_OFF+2(a0),d1
+          move.w    WIN_ROOT_YX+0(a0),d0
+          move.w    WIN_ROOT_YX+2(a0),d1
           cmp.w     #1,d2
           beq.s     exit2
           add.w     d0,2(a1)
@@ -125,19 +125,18 @@ exit2     add.w     d0,6(a1)
           add.w     d1,4(a1)
 exit1     tst.b     UNDO_STATE(a6)
           beq.s     exit6
-          move.l    rec_adr,a0          full-screen mode?
-          move.w    SCHIEBER(a0),d0     -> no backup needed
-          bmi       exit6
+          bsr       is_absmode          full-screen mode?
+          beq.s     exit6               -> no backup needed
           bsr       save_buf            copy image into undo buffer
           bsr       win_abs             re-calc. window clipping rect.
           move.l    win_xy,d0
           move.l    win_xy+4,d1
           move.l    d0,d2
           move.l    rec_adr,a1          calc. X/Y of window root in image buffer
-          add.w     YX_OFF+0(a1),d2
-          add.l     YX_OFF+2(a1),d2
+          add.w     WIN_ROOT_YX+0(a1),d2
+          add.l     WIN_ROOT_YX+2(a1),d2
           move.l    logbase,a0          copy from window clipping rect. on phys. screen...
-          move.l    BILD_ADR(a1),a1     ...into image buffer
+          move.l    WIN_IMGBUF_ADDR(a1),a1     ...into image buffer
           bsr       copy_blk
           ;
 exit3     moveq.l   #MEN_IT_UNDO,d0     ;enable "undo" menu entry
@@ -157,8 +156,8 @@ donot     move.w    #-1,MOUSE_LBUT+2(a6)   mouse click unhandled
 *-----------------------------------------------------------------------------
 pospe     clr.w     UNDO_STATE(a6)      *** Save position ***
           move.l    rec_adr,a0
-          add.w     YX_OFF(a0),d3
-          add.l     YX_OFF+2(a0),d3
+          add.w     WIN_ROOT_YX(a0),d3
+          add.l     WIN_ROOT_YX+2(a0),d3
           lea       last_koo,a0
           move.l    4(a0),(a0)+
           move.l    d3,(a0)
@@ -700,9 +699,9 @@ text17    move.l    win_xy,d0           temporary copy of image
           move.l    win_xy+4,d1
           move.l    d0,d2
           move.l    rec_adr,a0
-          add.w     YX_OFF+0(a0),d2
-          add.l     YX_OFF+2(a0),d2
-          move.l    BILD_ADR(a0),a1
+          add.w     WIN_ROOT_YX+0(a0),d2
+          add.l     WIN_ROOT_YX+2(a0),d2
+          move.l    WIN_IMGBUF_ADDR(a0),a1
           move.l    logbase,a0
           bsr       copy_blk
           lea       stack,a3
@@ -739,11 +738,11 @@ text21    sub.l     #$30003,d0
           bsr       lim_win             clip to window
           move.l    d0,d2
           move.l    rec_adr,a0
-          add.w     YX_OFF+0(a0),d0
-          add.w     YX_OFF+0(a0),d1
-          add.l     YX_OFF+2(a0),d0
-          add.l     YX_OFF+2(a0),d1
-          move.l    BILD_ADR(a0),a0
+          add.w     WIN_ROOT_YX+0(a0),d0
+          add.w     WIN_ROOT_YX+0(a0),d1
+          add.l     WIN_ROOT_YX+2(a0),d0
+          add.l     WIN_ROOT_YX+2(a0),d1
+          move.l    WIN_IMGBUF_ADDR(a0),a0
           move.l    logbase,a1
           bsr       copy_blk
           movem.l   (sp)+,d2/a2-a3
@@ -777,11 +776,11 @@ text16    bsr       form_do
           move.l    win_xy,d0           redisplay image
           move.l    win_xy+4,d1
           move.l    d0,d2
-          add.w     YX_OFF+0(a4),d0
-          add.w     YX_OFF+0(a4),d1
-          add.l     YX_OFF+2(a4),d0
-          add.l     YX_OFF+2(a4),d1
-          move.l    BILD_ADR(a4),a0
+          add.w     WIN_ROOT_YX+0(a4),d0
+          add.w     WIN_ROOT_YX+0(a4),d1
+          add.l     WIN_ROOT_YX+2(a4),d0
+          add.l     WIN_ROOT_YX+2(a4),d1
+          move.l    WIN_IMGBUF_ADDR(a4),a0
           move.l    logbase,a1
           bsr       copy_blk
           movem.l   (sp)+,a2-a4/d2
@@ -809,7 +808,7 @@ text9     lea       INTIN(a6),a1
           ;
 text4     move.l    bildbuff,a0         +++ End +++
           move.l    rec_adr,a1
-          move.l    BILD_ADR(a1),a1
+          move.l    WIN_IMGBUF_ADDR(a1),a1
           move.w    #1999,d0
 text5     move.l    (a0)+,(a1)+
           move.l    (a0)+,(a1)+
@@ -892,10 +891,10 @@ schub7    move.l    d2,24(a3)           24: source coord.
           sub.l     d2,d3
           move.l    d3,8(a3)            8: selection width
           move.l    rec_adr,a0
-          sub.w     YX_OFF+0(a0),d0
-          sub.l     YX_OFF+2(a0),d0
-          sub.w     YX_OFF+0(a0),d1
-          sub.l     YX_OFF+2(a0),d1
+          sub.w     WIN_ROOT_YX+0(a0),d0
+          sub.l     WIN_ROOT_YX+2(a0),d0
+          sub.w     WIN_ROOT_YX+0(a0),d1
+          sub.l     WIN_ROOT_YX+2(a0),d1
           move.l    MOUSE_ORIG_XY(a6),(a3)    0: prev. mouse coords.
           move.l    d0,4(a3)            4: cur selection frame coords.
           bsr       lim_win
@@ -911,7 +910,7 @@ schub5    move.l    SEL_OV_BUF(a6),16(a3)   16: background source address
           move.l    bildbuff,20(a3)     20: selection image source = backup buffer
           bra.s     schub4
 schub9    move.l    bildbuff,16(a3)     + NORM-Mode +
-          move.l    BILD_ADR(a4),20(a3) 20: selection image source = image buffer
+          move.l    WIN_IMGBUF_ADDR(a4),20(a3) 20: selection image source = image buffer
           tst.b     SEL_TMP_OVERLAY(a6) overlay mode temporarily enabled?
           bne.s     schub4              -> keep old background
           bsr       save_buf
@@ -941,10 +940,10 @@ schub8    move.l    d3,-(sp)            ++ Restore ++
           move.l    SEL_FRM_X2Y2(a6),d1
           move.l    d0,d2
           move.l    rec_adr,a0
-          add.w     YX_OFF+0(a0),d0
-          add.w     YX_OFF+0(a0),d1
-          add.l     YX_OFF+2(a0),d0
-          add.l     YX_OFF+2(a0),d1
+          add.w     WIN_ROOT_YX+0(a0),d0
+          add.w     WIN_ROOT_YX+0(a0),d1
+          add.l     WIN_ROOT_YX+2(a0),d0
+          add.l     WIN_ROOT_YX+2(a0),d1
           move.l    stack+16,a0
           move.l    logbase,a1
           bsr       copy_blk
@@ -965,8 +964,8 @@ schub8    move.l    d3,-(sp)            ++ Restore ++
 schub3    move.l    rec_adr,a2          +++ finalize move +++
           move.b    SEL_OPT_OVERLAY(a6),d0
           bne.s     schub20
-          move.w    YX_OFF+0(a2),d0       + NORM mode +
-          move.w    YX_OFF+2(a2),d1
+          move.w    WIN_ROOT_YX+0(a2),d0       + NORM mode +
+          move.w    WIN_ROOT_YX+2(a2),d1
           lea       SEL_FRM_X1Y1(a6),a0
           add.w     d1,(a0)+
           add.w     d0,(a0)+
@@ -976,7 +975,7 @@ schub3    move.l    rec_adr,a2          +++ finalize move +++
           bra       schub21
 schub20   move.w    #1999,d3            + Overlay mode +
           move.l    SEL_OV_BUF(a6),a0
-          move.l    BILD_ADR(a2),a1
+          move.l    WIN_IMGBUF_ADDR(a2),a1
 schub26   move.l    (a0)+,(a1)+
           move.l    (a0)+,(a1)+
           move.l    (a0)+,(a1)+
@@ -990,7 +989,7 @@ schub26   move.l    (a0)+,(a1)+
           move.w    (a0),d1
           add.w     d1,(a1)+
           add.w     d0,(a1)
-          move.l    BILD_ADR(a2),a1
+          move.l    WIN_IMGBUF_ADDR(a2),a1
           bsr       fram_ins
           move.l    SEL_FRM_X2Y2(a6),d0   ; selection cut off at window borders?
           sub.l     SEL_FRM_X1Y1(a6),d0
@@ -1117,8 +1116,8 @@ noch_in1  moveq.l   #1,d2
           ;
 *-----------------------------------------------------------------------------
 win_abs   move.l    rec_adr,a0          ** Limit window size **
-          move.l    FENSTER(a0),d0
-          move.l    FENSTER+4(a0),d1
+          move.l    WIN_CUR_XY(a0),d0
+          move.l    WIN_CUR_WH(a0),d1
           lea       win_xy,a0
           move.l    d0,(a0)
           add.l     d1,d0
@@ -1168,7 +1167,7 @@ new_3koo  rts
           ;
 *-----------------------------------------------------------------------------
 save_buf  move.l    rec_adr,a1          ** Copy image to undo buffer **
-          move.l    BILD_ADR(a1),a1
+          move.l    WIN_IMGBUF_ADDR(a1),a1
           move.l    bildbuff,a2
           move.l    #1999,d0
 save_bu1  move.l    (a1)+,(a2)+
@@ -1234,14 +1233,14 @@ fram_drw  tst.w     SEL_STATE(a6)       ** frame the selection **
           move.w    SEL_FRM_X1Y1+2(a6),d5
           move.w    SEL_FRM_X2Y2+0(a6),d6
           move.w    SEL_FRM_X2Y2+2(a6),d7
-          sub.w     YX_OFF+0(a1),d5
-          sub.w     YX_OFF+0(a1),d7
+          sub.w     WIN_ROOT_YX+0(a1),d5
+          sub.w     WIN_ROOT_YX+0(a1),d7
           bmi       tool_rts
-          sub.w     YX_OFF+2(a1),d4
-          sub.w     YX_OFF+2(a1),d6
+          sub.w     WIN_ROOT_YX+2(a1),d4
+          sub.w     WIN_ROOT_YX+2(a1),d6
           bmi       tool_rts
-          move.l    FENSTER(a1),d0      window borders
-          move.l    FENSTER+4(a1),d1
+          move.l    WIN_CUR_XY(a1),d0      window borders
+          move.l    WIN_CUR_WH(a1),d1
           add.l     d0,d1
           sub.l     #$10001,d1
           cmp.w     #400,d0             screen borders
@@ -1340,12 +1339,12 @@ fram_de1  bset.b    #3,(a0)             disable menu entries
           move.l    rec_adr,a0          store old frame coord.
           move.l    SEL_FRM_X1Y1(a6),UNDO_SEL_X1Y1(a6)
           move.l    SEL_FRM_X2Y2(a6),UNDO_SEL_X2Y2(a6)
-          move.l    BILD_ADR(a0),UNDO_BUF_ADDR(a6)
+          move.l    WIN_IMGBUF_ADDR(a0),UNDO_BUF_ADDR(a6)
           move.w    #$ff00,SEL_FLAG_PASTABLE(a6)   ;set flag "old frame exists"
           tst.b     SEL_STATE(a6)       is frame drawn?
           beq.s     fram_de3
           movem.l   a1-a4/d2-d7,-(sp)
-          bsr       get_top             toplevel window up-to-date?
+          bsr       aes_get_top         toplevel window up-to-date?
           bne.s     fram_de2
           bsr       fram_drw            yes -> delete frame
           movem.l   (sp)+,a1-a4/d2-d7
@@ -1364,7 +1363,7 @@ fram_de2  clr.w     SEL_STATE(a6)       no
 fram_mod  ;                             ** Selection content modified **
           move.l    SEL_FRM_X1Y1(a6),UNDO_SEL_X1Y1(a6)
           move.l    SEL_FRM_X2Y2(a6),UNDO_SEL_X2Y2(a6)
-          move.l    BILD_ADR(a0),UNDO_BUF_ADDR(a6)
+          move.l    WIN_IMGBUF_ADDR(a0),UNDO_BUF_ADDR(a6)
           rts
           ;
 *-----------------------------------------------------------------------------
@@ -1374,9 +1373,9 @@ koos_mak  move.w    chookoo,d0          ** Display mouse position **
           move.w    (a1),d0
           bmi       koos_ou2
           lea       koo_buff,a0         within a window?
-          move.l    FENSTER(a1),d1
+          move.l    WIN_CUR_XY(a1),d1
           move.l    d1,d2
-          add.l     FENSTER+4(a1),d2
+          add.l     WIN_CUR_WH(a1),d2
           sub.l     #$10001,d2
           move.l    d1,(a0)
           move.l    d2,4(a0)
@@ -1385,7 +1384,7 @@ koos_mak  move.w    chookoo,d0          ** Display mouse position **
           bsr       noch_in
           bne.s     koos_ou2
           lea       win_xy+8,a0
-          move.l    YX_OFF(a1),(a0)
+          move.l    WIN_ROOT_YX(a1),(a0)
           swap      d0
           move.w    d1,d0
           bsr.s     alrast              align with raster, if enabled
@@ -1395,12 +1394,12 @@ koos_mak  move.w    chookoo,d0          ** Display mouse position **
           move.l    d0,(a0)
 koos_out  move.l    rec_adr,a1          ++ print coords into string ++
           move.w    d0,d1
-          add.w     YX_OFF+0(a1),d1
+          add.w     WIN_ROOT_YX+0(a1),d1
           lea       koostr+11,a0
           bsr.s     koos_ou1
           move.l    d0,d1
           swap      d1
-          add.w     YX_OFF+2(a1),d1
+          add.w     WIN_ROOT_YX+2(a1),d1
           subq.l    #1,a0
           bsr.s     koos_ou1
           pea       koostr
